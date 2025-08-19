@@ -41,7 +41,6 @@ venv.bak/
 
 # Model artifacts
 checkpoints/
-models/
 *.pkl
 *.joblib
 
