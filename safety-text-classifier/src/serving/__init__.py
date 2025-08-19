@@ -1,0 +1,1 @@
+# Serving module for Safety Text Classifier

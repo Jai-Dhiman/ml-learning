@@ -1,0 +1,120 @@
+# Safety Text Classifier Base Configuration
+
+# Model Architecture
+model:
+  name: "safety_transformer"
+  vocab_size: 32000
+  embedding_dim: 768
+  num_layers: 6
+  num_heads: 12
+  feedforward_dim: 3072
+  max_sequence_length: 512
+  dropout_rate: 0.1
+  num_classes: 4 # hate_speech, self_harm, dangerous_advice, harassment
+
+# Training Configuration
+training:
+  batch_size: 16
+  learning_rate: 0.00002
+  warmup_steps: 1000
+  max_steps: 10000
+  eval_every: 1000
+  save_every: 5000
+  gradient_clip_norm: 1.0
+
+  # Optimizer
+  optimizer: "adamw"
+  weight_decay: 0.01
+  beta1: 0.9
+  beta2: 0.999
+
+  # Learning rate schedule
+  schedule: "cosine_with_warmup"
+  min_lr_ratio: 0.1
+
+# Data Configuration
+data:
+  # Dataset sources - using high-quality 2025 safety datasets
+  datasets:
+    - name: "nvidia/Aegis-AI-Content-Safety-Dataset-2.0"
+      config: null
+    - name: "lmsys/toxic-chat"
+      config: "toxicchat0124"
+    - name: "toxigen/toxigen-data"
+      config: null
+
+  # Preprocessing
+  max_length: 512
+  tokenizer: "sentence-transformers/all-MiniLM-L6-v2"
+
+  # Splits
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+
+  # Augmentation
+  text_augmentation: true
+  augmentation_prob: 0.1
+
+# Evaluation Configuration
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "auc_roc"
+    - "calibration_error"
+
+  fairness_metrics:
+    - "demographic_parity"
+    - "equalized_odds"
+    - "individual_fairness"
+
+  robustness_tests:
+    - "adversarial"
+    - "paraphrase"
+    - "out_of_distribution"
+
+# Logging and Monitoring
+logging:
+  wandb:
+    project: "constitutional-ai-research"
+    entity: "jaidhiman-capture"
+    tags: ["stage1", "safety", "transformer"]
+
+  prometheus:
+    port: 8080
+    metrics_prefix: "safety_classifier"
+
+  log_level: "INFO"
+  log_dir: "logs"
+
+# Deployment Configuration
+deployment:
+  model_server:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 4
+    max_batch_size: 32
+    timeout: 30
+
+  kubernetes:
+    namespace: "safety-classifier"
+    replicas: 3
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+        nvidia.com/gpu: "1"
+
+# Paths
+paths:
+  data_dir: "data"
+  model_dir: "models"
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs"
+  cache_dir: ".cache"

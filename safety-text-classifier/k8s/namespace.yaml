@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: safety-classifier
+  labels:
+    name: safety-classifier
+    app: safety-classifier
+    environment: production
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: safety-classifier-sa
+  namespace: safety-classifier
+  annotations:
+    iam.gke.io/gcp-service-account: safety-classifier@PROJECT_ID.iam.gserviceaccount.com
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: safety-classifier-role
+  namespace: safety-classifier
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: safety-classifier-rolebinding
+  namespace: safety-classifier
+subjects:
+- kind: ServiceAccount
+  name: safety-classifier-sa
+  namespace: safety-classifier
+roleRef:
+  kind: Role
+  name: safety-classifier-role
+  apiGroup: rbac.authorization.k8s.io
