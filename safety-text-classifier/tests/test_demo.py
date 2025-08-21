@@ -5,7 +5,7 @@ Test the Gradio demo interface
 
 import sys
 import os
-sys.path.append('src')
+sys.path.append('../src')
 
 from src.demo import SafetyClassifierDemo
 
@@ -58,7 +58,7 @@ def test_demo():
     print("✅ Multiple test cases")
     print("")
     print("🚀 Ready to launch full demo!")
-    print("Run: python demo_app.py --host 127.0.0.1 --port 7860")
+    print("Run: python scripts/demo_app.py --host 127.0.0.1 --port 7860")
 
 if __name__ == "__main__":
     test_demo()

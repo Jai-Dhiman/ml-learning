@@ -14,12 +14,12 @@ model:
 
 # Training Configuration
 training:
-  batch_size: 16
+  batch_size: 4
   learning_rate: 0.00002
   warmup_steps: 1000
   max_steps: 10000
   eval_every: 1000
-  save_every: 5000
+  save_every: 3333
   gradient_clip_norm: 1.0
 
   # Optimizer
@@ -36,12 +36,12 @@ training:
 data:
   # Dataset sources - using high-quality 2025 safety datasets
   datasets:
-    - name: "nvidia/Aegis-AI-Content-Safety-Dataset-2.0"
-      config: null
+    # - name: "nvidia/Aegis-AI-Content-Safety-Dataset-2.0"
+    #   config: null
     - name: "lmsys/toxic-chat"
       config: "toxicchat0124"
-    - name: "toxigen/toxigen-data"
-      config: null
+    # - name: "toxigen/toxigen-data"
+    #   config: null
 
   # Preprocessing
   max_length: 512

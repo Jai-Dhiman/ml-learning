@@ -6,7 +6,7 @@ Test all components with minimal data loading for fast feedback.
 """
 
 import sys
-sys.path.append('src')
+sys.path.append('../src')
 
 def test_basic_components():
     """Test basic components without heavy data loading."""

@@ -5,7 +5,7 @@ Quick demo test of the safety classifier
 
 import sys
 import os
-sys.path.append('src')
+sys.path.append('../src')
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +21,7 @@ def quick_demo():
     print("=" * 45)
     
     # Load config
-    with open('configs/base_config.yaml', 'r') as f:
+    with open('../configs/base_config.yaml', 'r') as f:
         config = yaml.safe_load(f)
     
     # Initialize tokenizer
@@ -85,8 +85,8 @@ def quick_demo():
     print("   (Random predictions - train model for real results)")
     print("")
     print("🚀 Next steps:")
-    print("   • Train model: python train.py") 
-    print("   • Full demo: python demo_app.py")
+    print("   • Train model: python scripts/train.py") 
+    print("   • Full demo: python scripts/demo_app.py")
 
 if __name__ == "__main__":
     quick_demo()

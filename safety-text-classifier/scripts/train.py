@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from training.trainer import train_model
 
@@ -25,7 +25,7 @@ def setup_logging(log_level: str = "INFO"):
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler('training.log')
+            logging.FileHandler('../logs/training/training.log')
         ]
     )
 
@@ -39,7 +39,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/base_config.yaml",
+        default="../configs/base_config.yaml",
         help="Path to configuration file"
     )
     

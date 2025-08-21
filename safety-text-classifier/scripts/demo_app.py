@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from src.demo import launch_demo
 
@@ -24,7 +24,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/base_config.yaml",
+        default="../configs/base_config.yaml",
         help="Path to configuration file"
     )
     

@@ -14,7 +14,7 @@ import yaml
 import json
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 from src.models.validation import ModelValidator
 from src.models.utils import ModelLoader

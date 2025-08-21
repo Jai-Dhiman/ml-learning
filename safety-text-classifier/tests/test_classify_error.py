@@ -4,7 +4,7 @@ Test script to reproduce the classification error
 """
 
 import sys
-sys.path.append('src')
+sys.path.append('../src')
 
 from src.demo import SafetyClassifierDemo
 

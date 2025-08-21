@@ -4,7 +4,7 @@ Debug the model forward pass
 """
 
 import sys
-sys.path.append('src')
+sys.path.append('../src')
 
 import jax
 import jax.numpy as jnp

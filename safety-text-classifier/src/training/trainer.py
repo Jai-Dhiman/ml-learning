@@ -20,8 +20,8 @@ from tqdm import tqdm
 import numpy as np
 from functools import partial
 
-from ..models.transformer import SafetyTransformer, create_model, initialize_model
-from ..data.dataset_loader import create_data_loaders
+from models.transformer import SafetyTransformer, create_model, initialize_model
+from data.dataset_loader import create_data_loaders
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ class SafetyTrainer:
         Args:
             config_path: Path to the configuration file
         """
+        self.config_path = config_path
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
@@ -135,6 +136,7 @@ class SafetyTrainer:
         self, 
         params: Dict[str, Any], 
         batch: Dict[str, jnp.ndarray],
+        rng_key: Optional[jnp.ndarray] = None,
         training: bool = True
     ) -> Tuple[jnp.ndarray, Dict[str, Any]]:
         """
@@ -143,15 +145,15 @@ class SafetyTrainer:
         Args:
             params: Model parameters
             batch: Batch of data
+            rng_key: RNG key for dropout (required if training=True)
             training: Whether in training mode
             
         Returns:
             Tuple of (loss, metrics_dict)
         """
-        # Split RNG for dropout if training
-        if training:
-            self.rng, dropout_rng = jax.random.split(self.rng)
-            rngs = {'dropout': dropout_rng}
+        # Use provided RNG for dropout if training
+        if training and rng_key is not None:
+            rngs = {'dropout': rng_key}
         else:
             rngs = None
             
@@ -191,7 +193,8 @@ class SafetyTrainer:
     def _train_step(
         self, 
         state: TrainState, 
-        batch: Dict[str, jnp.ndarray]
+        batch: Dict[str, jnp.ndarray],
+        rng_key: jnp.ndarray
     ) -> Tuple[TrainState, Dict[str, Any]]:
         """
         Single training step.
@@ -199,12 +202,13 @@ class SafetyTrainer:
         Args:
             state: Current training state
             batch: Batch of training data
+            rng_key: RNG key for dropout
             
         Returns:
             Tuple of (updated_state, metrics)
         """
         def loss_fn(params):
-            return self._compute_loss(params, batch, training=True)
+            return self._compute_loss(params, batch, rng_key, training=True)
         
         # Compute gradients
         (loss, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
@@ -233,7 +237,7 @@ class SafetyTrainer:
         Returns:
             Evaluation metrics
         """
-        loss, metrics = self._compute_loss(params, batch, training=False)
+        loss, metrics = self._compute_loss(params, batch, rng_key=None, training=False)
         return metrics
     
     def _create_batch(self, dataset, batch_size: int, rng_key):
@@ -273,7 +277,7 @@ class SafetyTrainer:
         if prefix == "train/":
             logger.info(f"Step {step}: Loss={metrics['loss']:.4f}, Acc={metrics['accuracy']:.4f}")
     
-    def evaluate(self, dataset, step: int, prefix: str = "val/") -> Dict[str, float]:
+    def evaluate(self, dataset, step: int, prefix: str = "val/", eval_rng=None) -> Dict[str, float]:
         """
         Evaluate model on a dataset.
         
@@ -281,6 +285,7 @@ class SafetyTrainer:
             dataset: Dataset to evaluate on
             step: Current step number
             prefix: Prefix for logging metrics
+            eval_rng: RNG key for evaluation (if None, creates new one)
             
         Returns:
             Dictionary of evaluation metrics
@@ -289,7 +294,9 @@ class SafetyTrainer:
         batch_size = self.training_config['batch_size']
         
         # Create evaluation batches
-        self.rng, eval_rng = jax.random.split(self.rng)
+        if eval_rng is None:
+            self.rng, eval_rng = jax.random.split(self.rng)
+        
         for batch in self._create_batch(dataset, batch_size, eval_rng):
             metrics = self.eval_step(self.state.params, batch)
             eval_metrics.append(metrics)
@@ -310,7 +317,7 @@ class SafetyTrainer:
     
     def save_checkpoint(self, step: int, is_best: bool = False):
         """Save model checkpoint."""
-        checkpoint_dir = self.config['paths']['checkpoint_dir']
+        checkpoint_dir = os.path.abspath(self.config['paths']['checkpoint_dir'])
         os.makedirs(checkpoint_dir, exist_ok=True)
         
         # Save regular checkpoint
@@ -318,7 +325,8 @@ class SafetyTrainer:
             checkpoint_dir,
             self.state,
             step=step,
-            keep=3
+            keep=3,
+            overwrite=True
         )
         
         # Save best checkpoint separately
@@ -328,7 +336,8 @@ class SafetyTrainer:
                 best_checkpoint_path,
                 self.state,
                 step=step,
-                keep=1
+                keep=1,
+                overwrite=True
             )
             logger.info(f"Saved best model checkpoint at step {step}")
     
@@ -338,9 +347,9 @@ class SafetyTrainer:
         """
         logger.info("Starting training...")
         
-        # Load datasets
+        # Load datasets  
         train_dataset, val_dataset, test_dataset = create_data_loaders(
-            config_path="configs/base_config.yaml"
+            config_path=self.config_path
         )
         
         batch_size = self.training_config['batch_size']
@@ -357,8 +366,11 @@ class SafetyTrainer:
             
             epoch_metrics = []
             for batch in self._create_batch(train_dataset, batch_size, epoch_rng):
+                # Get RNG key for this training step
+                self.rng, step_rng = jax.random.split(self.rng)
+                
                 # Training step
-                self.state, train_metrics = self.train_step(self.state, batch)
+                self.state, train_metrics = self.train_step(self.state, batch, step_rng)
                 epoch_metrics.append(train_metrics)
                 step += 1
                 
