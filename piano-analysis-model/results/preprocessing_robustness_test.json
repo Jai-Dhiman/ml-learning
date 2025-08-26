@@ -1,0 +1,41 @@
+[
+  {
+    "file_type": "WAV",
+    "file_name": "Beethoven_WoO80_var27_8bars_3_15.wav",
+    "success": true,
+    "duration": 14.350702947845805,
+    "num_scalar_features": 18,
+    "spectral_shapes": {
+      "mel_spectrogram": [
+        128,
+        619
+      ],
+      "mfccs": [
+        13,
+        619
+      ],
+      "chromagram": [
+        12,
+        619
+      ]
+    }
+  },
+  {
+    "file_type": "MIDI",
+    "file_name": "Schubert_D960_mv2_8bars_10_08.mid",
+    "success": false,
+    "error": "'PosixPath' object has no attribute 'encode'"
+  },
+  {
+    "file_type": "MIDI",
+    "file_name": "Schubert_D960_mv2_16bars_10_06.mid",
+    "success": false,
+    "error": "'PosixPath' object has no attribute 'encode'"
+  },
+  {
+    "file_type": "MIDI",
+    "file_name": "Schubert_D935_no.3_4bars_9_21.mid",
+    "success": false,
+    "error": "'PosixPath' object has no attribute 'encode'"
+  }
+]
