@@ -19,10 +19,9 @@ keywords:
   - perceptual modeling
 license: MIT
 authors:
-  - family-names: "User"
-    given-names: "Piano Analysis"
-    email: "contact@example.com"
-    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - family-names: "Dhiman"
+    given-names: "Jai"
+    email: "jai.dhiman@outlook.com"
 preferred-citation:
   type: software
   title: "Piano Performance Analysis Model"
