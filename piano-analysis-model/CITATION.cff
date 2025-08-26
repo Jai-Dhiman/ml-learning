@@ -4,8 +4,8 @@ type: software
 title: "Piano Performance Analysis Model"
 version: "1.0.0"
 date-released: "2025-08-26"
-url: "https://github.com/Jai-Dhiman/ml-learning/piano-analysis-model"
-repository-code: "https://github.com/Jai-Dhiman/ml-learning/piano-analysis-model"
+url: "https://github.com/Jai-Dhiman/ml-learning/tree/main/piano-analysis-model"
+repository-code: "https://github.com/Jai-Dhiman/ml-learning/tree/main/piano-analysis-model"
 abstract: >-
   A machine learning system for analyzing piano performance across 19 perceptual
   dimensions including timing, articulation, pedal use, timbre, dynamics, 
@@ -30,7 +30,7 @@ preferred-citation:
     - family-names: "User"
       given-names: "Piano Analysis"
   year: 2025
-  url: "https://github.com/Jai-Dhiman/ml-learning/piano-analysis-model"
+  url: "https://github.com/Jai-Dhiman/ml-learning/tree/main/piano-analysis-model"
 references:
   - type: article
     title: "PercePiano: A Dataset for Piano Performance Analysis"
