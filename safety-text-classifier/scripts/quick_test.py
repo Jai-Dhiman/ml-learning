@@ -6,7 +6,12 @@ Test all components with minimal data loading for fast feedback.
 """
 
 import sys
-sys.path.append('../src')
+import os
+# Add project root and src to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(project_root, 'src')
+sys.path.insert(0, project_root)
+sys.path.insert(0, src_path)
 
 def test_basic_components():
     """Test basic components without heavy data loading."""
@@ -14,7 +19,7 @@ def test_basic_components():
     
     # Test model creation
     try:
-        from src.models.transformer import create_model, initialize_model
+        from models.transformer import create_model, initialize_model
         import yaml
         import jax
         
@@ -42,7 +47,7 @@ def test_basic_components():
     
     # Test utilities
     try:
-        from src.models.utils import count_parameters, validate_model_config
+        from models.utils import count_parameters, validate_model_config
         param_count = count_parameters(params)
         validate_model_config(config)
         print(f"✅ Utilities test successful - {param_count:,} parameters")
@@ -52,7 +57,7 @@ def test_basic_components():
     
     # Test calibration
     try:
-        from src.models.calibration import TemperatureScaling, ConfidenceEstimator
+        from models.calibration import TemperatureScaling, ConfidenceEstimator
         import numpy as np
         
         # Quick test with dummy data
@@ -73,7 +78,7 @@ def test_basic_components():
     
     # Test visualization (without plots)
     try:
-        from src.models.visualization import AttentionVisualizer
+        from models.visualization import AttentionVisualizer
         viz = AttentionVisualizer()
         
         # Create dummy attention
@@ -95,7 +100,7 @@ def test_demo():
     print("\n🖥️ Testing demo interface...")
     
     try:
-        from src.demo import SafetyClassifierDemo
+        from demo import SafetyClassifierDemo
         demo = SafetyClassifierDemo()
         
         # Test classification
@@ -118,7 +123,7 @@ def test_server():
     print("\n🚀 Testing server components...")
     
     try:
-        from src.serving.inference_server import SafetyClassifierServer
+        from serving.inference_server import SafetyClassifierServer
         server = SafetyClassifierServer()
         
         print("✅ Server initialization successful")
@@ -137,7 +142,7 @@ def test_synthetic_data():
     print("\n📊 Testing synthetic data generation...")
     
     try:
-        from src.data.dataset_loader import SafetyDatasetLoader
+        from data.dataset_loader import SafetyDatasetLoader
         loader = SafetyDatasetLoader()
         
         # Create small synthetic dataset

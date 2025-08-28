@@ -198,6 +198,591 @@ class AttentionVisualizer:
         input_ids = attention_patterns["input_ids"][sample_idx]
         cls_attention = attention_patterns["cls_attention"][sample_idx]
         
+        # Get tokens
+        tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
+        
+        # Create list of token importance
+        token_importance = []
+        for i, (token, attention_weight) in enumerate(zip(tokens, cls_attention)):
+            if token not in [self.tokenizer.pad_token, self.tokenizer.unk_token]:
+                token_importance.append({
+                    'token': token.replace('##', ''),
+                    'position': i,
+                    'attention_weight': float(attention_weight),
+                    'token_id': int(input_ids[i])
+                })
+        
+        # Sort by attention weight and return top-k
+        token_importance.sort(key=lambda x: x['attention_weight'], reverse=True)
+        return token_importance[:top_k]
+    
+    def create_layer_wise_attention_plot(
+        self,
+        attention_patterns: Dict[str, np.ndarray],
+        sample_idx: int = 0,
+        token_idx: int = 0,
+        figsize: Tuple[int, int] = (12, 6)
+    ) -> plt.Figure:
+        """
+        Plot attention weights across different transformer layers.
+        
+        Args:
+            attention_patterns: Output from extract_attention_patterns
+            sample_idx: Index of the sample to visualize
+            token_idx: Index of the token to analyze
+            figsize: Figure size
+            
+        Returns:
+            Matplotlib figure
+        """
+        layer_wise = attention_patterns["layer_wise"]
+        num_layers = len(layer_wise)
+        
+        # Extract attention for specific token across layers
+        token_attention_by_layer = []
+        for layer_idx, layer_attention in enumerate(layer_wise):
+            # Average across heads
+            layer_avg = np.mean(layer_attention[sample_idx], axis=0)
+            # Get attention to the specific token
+            token_attention = layer_avg[token_idx, :]
+            token_attention_by_layer.append(token_attention)
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        # Plot as heatmap
+        attention_matrix = np.array(token_attention_by_layer)
+        sns.heatmap(
+            attention_matrix,
+            ax=ax,
+            cmap="Blues",
+            cbar_kws={'label': 'Attention Weight'}
+        )
+        
+        ax.set_xlabel("Target Token Position")
+        ax.set_ylabel("Transformer Layer")
+        ax.set_title(f"Layer-wise Attention from Token {token_idx}")
+        
+        plt.tight_layout()
+        return fig
+    
+    def generate_text_explanation(
+        self,
+        text: str,
+        attention_patterns: Dict[str, np.ndarray],
+        prediction_scores: Dict[str, float],
+        sample_idx: int = 0,
+        top_k: int = 5
+    ) -> str:
+        """
+        Generate a text-based explanation of the model's decision.
+        
+        Args:
+            text: Original input text
+            attention_patterns: Output from extract_attention_patterns
+            prediction_scores: Safety category scores
+            sample_idx: Index of the sample to explain
+            top_k: Number of top tokens to highlight
+            
+        Returns:
+            Human-readable explanation string
+        """
+        # Get most important tokens
+        important_tokens = self.identify_important_tokens(
+            attention_patterns, sample_idx, top_k
+        )
+        
+        # Find the highest scoring safety category
+        max_category = max(prediction_scores.keys(), key=lambda k: prediction_scores[k])
+        max_score = prediction_scores[max_category]
+        
+        # Create explanation
+        explanation = f"**Safety Classification Analysis**\n\n"
+        explanation += f"**Prediction**: {max_category.replace('_', ' ').title()} "
+        explanation += f"(confidence: {max_score:.1%})\n\n"
+        
+        if max_score > 0.5:
+            explanation += f"**Why this text was flagged as {max_category.replace('_', ' ')}:**\n"
+        else:
+            explanation += "**Why this text was classified as safe:**\n"
+        
+        explanation += "The model focused on these key words/phrases:\n\n"
+        
+        for i, token_info in enumerate(important_tokens, 1):
+            token = token_info['token']
+            weight = token_info['attention_weight']
+            explanation += f"{i}. **{token}** (attention: {weight:.3f})\n"
+        
+        explanation += "\n**Interpretation:**\n"
+        if max_score > 0.7:
+            explanation += "High confidence prediction - the model strongly associates "
+            explanation += "the highlighted words with this safety category."
+        elif max_score > 0.5:
+            explanation += "Moderate confidence prediction - some indicators present "
+            explanation += "but not definitively harmful."
+        else:
+            explanation += "The model found no strong indicators of harmful content "
+            explanation += "in the provided text."
+        
+        return explanation
+
+
+class FeatureImportanceAnalyzer:
+    """
+    Analyzes feature importance using gradient-based methods.
+    """
+    
+    def __init__(self):
+        self.tokenizer = None
+    
+    def set_tokenizer(self, tokenizer):
+        """Set the tokenizer for token analysis."""
+        self.tokenizer = tokenizer
+    
+    def compute_gradient_attribution(
+        self,
+        model,
+        params: Dict[str, Any],
+        input_ids: jnp.ndarray,
+        target_class: int = 0
+    ) -> jnp.ndarray:
+        """
+        Compute gradient-based feature attribution.
+        
+        Args:
+            model: JAX model
+            params: Model parameters
+            input_ids: Input token IDs
+            target_class: Target class for attribution
+            
+        Returns:
+            Attribution scores for each input token
+        """
+        def model_output(input_ids):
+            outputs = model.apply(params, input_ids, training=False)
+            return outputs['logits'][0, target_class]  # Target class logit
+        
+        # Compute gradients
+        grad_fn = jax.grad(model_output)
+        gradients = grad_fn(input_ids)
+        
+        # Use input * gradient as attribution
+        attribution = input_ids * gradients
+        
+        return attribution
+    
+    def integrated_gradients(
+        self,
+        model,
+        params: Dict[str, Any],
+        input_ids: jnp.ndarray,
+        baseline_ids: Optional[jnp.ndarray] = None,
+        target_class: int = 0,
+        num_steps: int = 50
+    ) -> jnp.ndarray:
+        """
+        Compute integrated gradients attribution.
+        
+        Args:
+            model: JAX model
+            params: Model parameters  
+            input_ids: Input token IDs
+            baseline_ids: Baseline input (default: zeros)
+            target_class: Target class for attribution
+            num_steps: Number of integration steps
+            
+        Returns:
+            Integrated gradients attribution scores
+        """
+        if baseline_ids is None:
+            baseline_ids = jnp.zeros_like(input_ids)
+        
+        def model_output(input_ids):
+            outputs = model.apply(params, input_ids, training=False)
+            return outputs['logits'][0, target_class]
+        
+        # Create interpolated inputs
+        alphas = jnp.linspace(0, 1, num_steps)
+        interpolated_inputs = [
+            baseline_ids + alpha * (input_ids - baseline_ids) 
+            for alpha in alphas
+        ]
+        
+        # Compute gradients for each interpolated input
+        grad_fn = jax.grad(model_output)
+        gradients = [grad_fn(inp) for inp in interpolated_inputs]
+        
+        # Average gradients and multiply by input difference
+        avg_gradients = jnp.mean(jnp.stack(gradients), axis=0)
+        integrated_grads = avg_gradients * (input_ids - baseline_ids)
+        
+        return integrated_grads
+    
+    def visualize_token_importance(
+        self,
+        attribution_scores: jnp.ndarray,
+        input_ids: jnp.ndarray,
+        text: str,
+        figsize: Tuple[int, int] = (12, 6),
+        save_path: Optional[str] = None
+    ) -> plt.Figure:
+        """
+        Visualize token importance scores.
+        
+        Args:
+            attribution_scores: Attribution scores for each token
+            input_ids: Input token IDs
+            text: Original text
+            figsize: Figure size
+            save_path: Optional path to save figure
+            
+        Returns:
+            Matplotlib figure
+        """
+        if self.tokenizer is None:
+            raise ValueError("Tokenizer not set. Call set_tokenizer() first.")
+        
+        # Get tokens
+        tokens = self.tokenizer.convert_ids_to_tokens(input_ids[0])  # Remove batch dim
+        
+        # Filter out special tokens
+        valid_indices = []
+        valid_tokens = []
+        valid_scores = []
+        
+        for i, (token, score) in enumerate(zip(tokens, attribution_scores[0])):
+            if token not in [self.tokenizer.pad_token, self.tokenizer.unk_token]:
+                valid_indices.append(i)
+                valid_tokens.append(token.replace('##', ''))
+                valid_scores.append(float(score))
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        # Create bar plot
+        bars = ax.bar(range(len(valid_tokens)), valid_scores)
+        ax.set_xlabel("Tokens")
+        ax.set_ylabel("Attribution Score")
+        ax.set_title("Token Importance (Gradient Attribution)")
+        ax.set_xticks(range(len(valid_tokens)))
+        ax.set_xticklabels(valid_tokens, rotation=45, ha='right')
+        
+        # Color bars based on score (positive = red, negative = blue)
+        max_abs_score = max(abs(min(valid_scores)), abs(max(valid_scores)))
+        for bar, score in zip(bars, valid_scores):
+            if score >= 0:
+                bar.set_color(plt.cm.Reds(score / max_abs_score))
+            else:
+                bar.set_color(plt.cm.Blues(abs(score) / max_abs_score))
+        
+        # Add horizontal line at y=0
+        ax.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        
+        return fig
+
+
+class ModelExplainer:
+    """
+    High-level interface for model explanations.
+    """
+    
+    def __init__(self, tokenizer_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+        """
+        Initialize the model explainer.
+        
+        Args:
+            tokenizer_name: Name of the tokenizer to use
+        """
+        self.attention_viz = AttentionVisualizer(tokenizer_name)
+        self.feature_analyzer = FeatureImportanceAnalyzer()
+        self.feature_analyzer.set_tokenizer(self.attention_viz.tokenizer)
+    
+    def explain_prediction(
+        self,
+        model,
+        params: Dict[str, Any],
+        text: str,
+        prediction_scores: Dict[str, float],
+        methods: List[str] = None,
+        save_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive explanation for a model prediction.
+        
+        Args:
+            model: JAX model
+            params: Model parameters
+            text: Input text
+            prediction_scores: Safety category scores
+            methods: List of explanation methods to use
+            save_dir: Optional directory to save visualizations
+            
+        Returns:
+            Dictionary containing explanations and visualizations
+        """
+        if methods is None:
+            methods = ['attention', 'gradients']
+        
+        # Tokenize input
+        inputs = self.attention_viz.tokenizer(
+            text,
+            truncation=True,
+            padding='max_length',
+            max_length=512,
+            return_tensors='np'
+        )
+        input_ids = jnp.array(inputs['input_ids'])
+        
+        explanations = {
+            'text': text,
+            'prediction_scores': prediction_scores,
+            'methods_used': methods
+        }
+        
+        # Get model outputs with attention
+        outputs = model.apply(params, input_ids, training=False)
+        
+        if 'attention' in methods and 'attention_weights' in outputs:
+            # Attention-based explanations
+            attention_patterns = self.attention_viz.extract_attention_patterns(
+                outputs['attention_weights'], input_ids
+            )
+            
+            # Generate text explanation
+            text_explanation = self.attention_viz.generate_text_explanation(
+                text, attention_patterns, prediction_scores
+            )
+            
+            # Create attention heatmap
+            attention_fig = self.attention_viz.create_attention_heatmap(
+                attention_patterns,
+                save_path=f"{save_dir}/attention_heatmap.png" if save_dir else None
+            )
+            
+            explanations['attention'] = {
+                'patterns': attention_patterns,
+                'text_explanation': text_explanation,
+                'visualization': attention_fig,
+                'important_tokens': self.attention_viz.identify_important_tokens(
+                    attention_patterns
+                )
+            }
+        
+        if 'gradients' in methods:
+            # Gradient-based explanations
+            max_category_idx = list(prediction_scores.values()).index(
+                max(prediction_scores.values())
+            )
+            
+            gradient_attribution = self.feature_analyzer.compute_gradient_attribution(
+                model, params, input_ids, target_class=max_category_idx
+            )
+            
+            # Integrated gradients
+            integrated_grads = self.feature_analyzer.integrated_gradients(
+                model, params, input_ids, target_class=max_category_idx
+            )
+            
+            # Create visualization
+            gradient_fig = self.feature_analyzer.visualize_token_importance(
+                gradient_attribution, input_ids, text,
+                save_path=f"{save_dir}/gradient_attribution.png" if save_dir else None
+            )
+            
+            explanations['gradients'] = {
+                'attribution_scores': gradient_attribution,
+                'integrated_gradients': integrated_grads,
+                'visualization': gradient_fig
+            }
+        
+        return explanations
+    
+    def create_explanation_report(
+        self,
+        explanations: Dict[str, Any],
+        save_path: Optional[str] = None
+    ) -> str:
+        """
+        Create a comprehensive explanation report.
+        
+        Args:
+            explanations: Output from explain_prediction
+            save_path: Optional path to save the report
+            
+        Returns:
+            Formatted explanation report as string
+        """
+        report = "# Safety Text Classifier - Prediction Explanation\n\n"
+        report += f"**Input Text**: {explanations['text']}\n\n"
+        
+        # Prediction summary
+        report += "## Prediction Summary\n\n"
+        scores = explanations['prediction_scores']
+        for category, score in sorted(scores.items(), key=lambda x: x[1], reverse=True):
+            report += f"- **{category.replace('_', ' ').title()}**: {score:.1%}\n"
+        
+        # Attention-based explanation
+        if 'attention' in explanations:
+            report += "\n## Attention-Based Analysis\n\n"
+            report += explanations['attention']['text_explanation']
+            
+            report += "\n### Most Important Tokens\n\n"
+            for i, token_info in enumerate(explanations['attention']['important_tokens'][:5], 1):
+                report += f"{i}. **{token_info['token']}** "
+                report += f"(position: {token_info['position']}, "
+                report += f"attention: {token_info['attention_weight']:.3f})\n"
+        
+        # Gradient-based explanation
+        if 'gradients' in explanations:
+            report += "\n## Gradient-Based Analysis\n\n"
+            report += "Gradient attribution shows which tokens most strongly influence "
+            report += "the model's prediction. Positive scores indicate tokens that "
+            report += "increase the predicted probability, while negative scores "
+            report += "indicate tokens that decrease it.\n"
+        
+        report += "\n---\n"
+        report += "*This explanation was generated using the Safety Text Classifier's "
+        report += "explainability tools. It shows which parts of the input text most "
+        report += "strongly influenced the model's safety classification decision.*\n"
+        
+        if save_path:
+            with open(save_path, 'w') as f:
+                f.write(report)
+        
+        return report
+
+
+# Utility functions
+def create_attention_summary(
+    attention_weights: List[jnp.ndarray],
+    input_ids: jnp.ndarray,
+    tokenizer,
+    top_k: int = 10
+) -> Dict[str, Any]:
+    """
+    Create a quick summary of attention patterns.
+    
+    Args:
+        attention_weights: List of attention weights from model
+        input_ids: Input token IDs
+        tokenizer: Tokenizer for decoding
+        top_k: Number of top tokens to include
+        
+    Returns:
+        Summary dictionary
+    """
+    viz = AttentionVisualizer()
+    viz.tokenizer = tokenizer
+    
+    patterns = viz.extract_attention_patterns(attention_weights, input_ids)
+    important_tokens = viz.identify_important_tokens(patterns, top_k=top_k)
+    
+    return {
+        'top_tokens': important_tokens,
+        'attention_patterns': patterns
+    }
+
+
+def plot_prediction_confidence(
+    prediction_scores: Dict[str, float],
+    figsize: Tuple[int, int] = (10, 6),
+    save_path: Optional[str] = None
+) -> plt.Figure:
+    """
+    Plot prediction confidence scores.
+    
+    Args:
+        prediction_scores: Safety category scores
+        figsize: Figure size
+        save_path: Optional path to save figure
+        
+    Returns:
+        Matplotlib figure
+    """
+    categories = list(prediction_scores.keys())
+    scores = list(prediction_scores.values())
+    
+    # Clean up category names
+    clean_categories = [cat.replace('_', ' ').title() for cat in categories]
+    
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    bars = ax.bar(clean_categories, scores)
+    ax.set_ylabel('Confidence Score')
+    ax.set_title('Safety Classification Confidence')
+    ax.set_ylim(0, 1)
+    
+    # Color bars based on score
+    max_score = max(scores)
+    for bar, score in zip(bars, scores):
+        if score == max_score:
+            bar.set_color('red' if score > 0.5 else 'green')
+        else:
+            bar.set_color('lightgray')
+    
+    # Add value labels on bars
+    for bar, score in zip(bars, scores):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+               f'{score:.2f}', ha='center', va='bottom')
+    
+    # Add threshold line
+    ax.axhline(y=0.5, color='orange', linestyle='--', alpha=0.7, 
+              label='Safety Threshold')
+    ax.legend()
+    
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    
+    if save_path:
+        fig.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    return fig
+
+
+if __name__ == "__main__":
+    # Test visualization tools
+    logging.basicConfig(level=logging.INFO)
+    
+    # Create dummy data for testing
+    import jax.numpy as jnp
+    
+    # Dummy attention weights and input
+    batch_size, num_heads, seq_len = 1, 8, 20
+    num_layers = 6
+    
+    dummy_attention = [
+        jnp.ones((batch_size, num_heads, seq_len, seq_len)) / seq_len
+        for _ in range(num_layers)
+    ]
+    dummy_input_ids = jnp.arange(seq_len).reshape(1, -1)
+    
+    # Test AttentionVisualizer
+    viz = AttentionVisualizer()
+    patterns = viz.extract_attention_patterns(dummy_attention, dummy_input_ids)
+    important_tokens = viz.identify_important_tokens(patterns, top_k=5)
+    
+    print(f"✅ AttentionVisualizer test successful")
+    print(f"   Important tokens: {len(important_tokens)}")
+    print(f"   Attention patterns keys: {list(patterns.keys())}")
+    
+    # Test prediction confidence plot
+    dummy_scores = {
+        'hate_speech': 0.1,
+        'self_harm': 0.3,
+        'dangerous_advice': 0.8,
+        'harassment': 0.2
+    }
+    
+    fig = plot_prediction_confidence(dummy_scores)
+    print(f"✅ Prediction confidence plot created")
+    
+    print("\n🎉 Visualization tools test completed successfully!")
         # Get tokens and their attention weights
         tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
         

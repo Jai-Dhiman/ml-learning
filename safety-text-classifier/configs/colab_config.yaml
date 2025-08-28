@@ -1,0 +1,131 @@
+# Safety Text Classifier Colab Configuration
+# Optimized for Google Colab GPU training
+
+# Model Architecture - Optimized for Colab GPU memory
+model:
+  name: "safety_transformer"
+  vocab_size: 32000
+  embedding_dim: 512  # Reduced from 768 for better GPU utilization
+  num_layers: 4       # Reduced from 6 for faster training
+  num_heads: 8        # Reduced from 12
+  feedforward_dim: 2048  # Reduced from 3072
+  max_sequence_length: 384  # Reduced from 512
+  dropout_rate: 0.1
+  num_classes: 4 # hate_speech, self_harm, dangerous_advice, harassment
+
+# Training Configuration - Optimized for Colab
+training:
+  batch_size: 16      # Increased from 4 - GPU can handle more
+  learning_rate: 0.0001  # Slightly higher for faster convergence
+  warmup_steps: 500   # Reduced warmup
+  max_steps: 5000     # Reduced total steps for faster completion
+  eval_every: 500     # More frequent evaluation
+  save_every: 1000    # Less frequent saving to avoid storage issues
+  gradient_clip_norm: 1.0
+
+  # Optimizer
+  optimizer: "adamw"
+  weight_decay: 0.01
+  beta1: 0.9
+  beta2: 0.999
+
+  # Learning rate schedule
+  schedule: "cosine_with_warmup"
+  min_lr_ratio: 0.1
+
+# Data Configuration
+data:
+  # Dataset sources - using high-quality 2025 safety datasets
+  datasets:
+    - name: "lmsys/toxic-chat"
+      config: "toxicchat0124"
+    # Additional datasets can be uncommented as needed
+    # - name: "nvidia/Aegis-AI-Content-Safety-Dataset-2.0"
+    #   config: null
+
+  # Preprocessing
+  max_length: 384     # Reduced to match model config
+  tokenizer: "sentence-transformers/all-MiniLM-L6-v2"
+
+  # Splits
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+
+  # Augmentation - reduced for faster training
+  text_augmentation: false  # Disabled for Colab speed
+  augmentation_prob: 0.05
+
+# Evaluation Configuration
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "auc_roc"
+    - "calibration_error"
+
+  fairness_metrics:
+    - "demographic_parity"
+    - "equalized_odds"
+
+  robustness_tests:
+    - "adversarial"
+    - "paraphrase"
+
+# Logging and Monitoring - Colab optimized
+logging:
+  wandb:
+    project: "constitutional-ai-research-colab"
+    entity: "jaidhiman-capture"
+    tags: ["stage1", "safety", "transformer", "colab"]
+    # Colab-specific settings
+    mode: "online"  # Ensure online logging
+    save_code: true
+
+  log_level: "INFO"
+  log_dir: "/content/logs"  # Colab path
+  
+  # Disable prometheus for Colab
+  prometheus: null
+
+# Colab-specific deployment configuration
+deployment:
+  model_server:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 2  # Reduced for Colab
+    max_batch_size: 16
+    timeout: 60  # Increased for slower Colab response
+
+  # Kubernetes config disabled for Colab
+  kubernetes: null
+
+# Paths - Colab optimized
+paths:
+  data_dir: "/content/data"
+  model_dir: "/content/models"
+  checkpoint_dir: "/content/checkpoints"
+  log_dir: "/content/logs"
+  cache_dir: "/content/.cache"
+
+# Colab-specific optimizations
+colab:
+  # Memory management
+  xla_python_client_preallocate: false
+  xla_python_client_mem_fraction: 0.8
+  
+  # Enable mixed precision training for speed
+  mixed_precision: true
+  
+  # Gradient accumulation for effective larger batch size
+  gradient_accumulation_steps: 2
+  
+  # Checkpointing frequency (save to Drive)
+  save_to_drive: true
+  drive_checkpoint_dir: "/content/drive/MyDrive/safety-classifier-checkpoints"
+  
+  # Early stopping to avoid timeout
+  early_stopping_patience: 3
+  max_runtime_hours: 11  # Just under Colab's 12-hour limit

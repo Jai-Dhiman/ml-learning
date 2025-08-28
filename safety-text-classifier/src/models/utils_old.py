@@ -80,6 +80,10 @@ class ModelCheckpointManager:
         Returns:
             Path to saved checkpoint
         """
+        # Create checkpoint subdirectory
+        checkpoint_name = f"step_{step:06d}"
+        checkpoint_path = self.checkpoint_dir / checkpoint_name
+        
         try:
             # Save the checkpoint
             checkpoints.save_checkpoint(
@@ -101,10 +105,7 @@ class ModelCheckpointManager:
                 safety_categories=self.safety_categories
             )
             
-            # Create checkpoint path for metadata
-            checkpoint_path = self.checkpoint_dir / f"checkpoint_{step}"
             metadata_path = checkpoint_path.with_suffix('.metadata.json')
-            
             with open(metadata_path, 'w') as f:
                 # Convert to serializable format
                 metadata_dict = {
@@ -174,7 +175,7 @@ class ModelCheckpointManager:
                 params = restored_state
             
             # Load metadata
-            metadata_files = list(checkpoint_path.parent.glob(f"{checkpoint_path.name}*.metadata.json"))
+            metadata_files = list(checkpoint_path.glob("*.metadata.json"))
             if metadata_files:
                 with open(metadata_files[0], 'r') as f:
                     metadata_dict = json.load(f)
@@ -262,7 +263,7 @@ def validate_model_config(config: Dict[str, Any]) -> bool:
         raise ValueError("embedding_dim must be divisible by num_heads")
     
     # Check reasonable ranges
-    if model_config.get('dropout_rate', 0.1) < 0 or model_config.get('dropout_rate', 0.1) > 1:
+    if model_config['dropout_rate'] < 0 or model_config['dropout_rate'] > 1:
         raise ValueError("dropout_rate must be between 0 and 1")
     
     logger.info("Model configuration validation passed")
@@ -301,9 +302,189 @@ def get_model_info(params: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, 
             3: 'harassment'
         }
     }
+        """
+        Load the best available model.
+        
+        Args:
+            checkpoint_dir: Directory containing checkpoints
+            config_path: Optional path to config file
+            
+        Returns:
+            Tuple of (model, params, metadata)
+        """
+        loader = cls()
+        loader.checkpoint_manager.checkpoint_dir = Path(checkpoint_dir)
+        
+        best_path = loader.checkpoint_manager.get_best_checkpoint_path()
+        if best_path is None:
+            raise FileNotFoundError("No best model checkpoint found")
+        
+        return cls.load_model_for_inference(best_path, config_path)
+
+
+def count_parameters(params: Dict[str, Any]) -> int:
+    """
+    Count the total number of parameters in a model.
+    
+    Args:
+        params: Model parameters
+        
+    Returns:
+        Total parameter count
+    """
+    return sum(x.size for x in jax.tree_util.tree_leaves(params))
+
+
+def get_parameter_summary(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get a summary of model parameters.
+    
+    Args:
+        params: Model parameters
+        
+    Returns:
+        Parameter summary dictionary
+    """
+    total_params = count_parameters(params)
+    
+    # Get parameter shapes by layer
+    param_shapes = {}
+    for key, value in flax.traverse_util.flatten_dict(params).items():
+        layer_name = '/'.join(key[:-1]) if len(key) > 1 else 'root'
+        param_name = key[-1]
+        
+        if layer_name not in param_shapes:
+            param_shapes[layer_name] = {}
+        
+        param_shapes[layer_name][param_name] = {
+            'shape': value.shape,
+            'size': value.size,
+            'dtype': str(value.dtype)
+        }
+    
+    return {
+        'total_parameters': total_params,
+        'parameter_breakdown': param_shapes,
+        'memory_estimate_mb': total_params * 4 / (1024 * 1024)  # Assume float32
+    }
+
+
+def validate_model_config(config: Dict[str, Any]) -> bool:
+    """
+    Validate model configuration.
+    
+    Args:
+        config: Model configuration
+        
+    Returns:
+        True if valid, raises exception if invalid
+    """
+    required_fields = [
+        'model.vocab_size',
+        'model.embedding_dim', 
+        'model.num_layers',
+        'model.num_heads',
+        'model.feedforward_dim',
+        'model.max_sequence_length',
+        'model.num_classes'
+    ]
+    
+    def get_nested_value(d, key_path):
+        keys = key_path.split('.')
+        value = d
+        for key in keys:
+            if key not in value:
+                raise ValueError(f"Missing required config field: {key_path}")
+            value = value[key]
+        return value
+    
+    # Check required fields
+    for field in required_fields:
+        get_nested_value(config, field)
+    
+    # Validate specific constraints
+    model_config = config['model']
+    
+    if model_config['embedding_dim'] % model_config['num_heads'] != 0:
+        raise ValueError("embedding_dim must be divisible by num_heads")
+    
+    if model_config['num_classes'] != 4:
+        logger.warning(f"Expected 4 safety categories, got {model_config['num_classes']}")
+    
+    logger.info("Model configuration validation passed")
+    return True
+
+
+# Convenience functions
+def save_model_checkpoint(*args, **kwargs):
+    """Convenience function for saving checkpoints."""
+    manager = ModelCheckpointManager()
+    return manager.save_checkpoint(*args, **kwargs)
+
+
+def load_model_checkpoint(*args, **kwargs):
+    """Convenience function for loading checkpoints."""
+    manager = ModelCheckpointManager()
+    return manager.load_checkpoint(*args, **kwargs)
+
+
+def load_best_model(*args, **kwargs):
+    """Convenience function for loading the best model."""
+    return ModelLoader.load_best_model(*args, **kwargs)
 
 
 if __name__ == "__main__":
     # Test the utilities
+    import tempfile
+    
     logging.basicConfig(level=logging.INFO)
-    print("✅ Utils module loaded successfully!")
+    
+    # Test model creation and parameter counting
+    with open("configs/base_config.yaml", 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Validate config
+    validate_model_config(config)
+    
+    # Create model and count parameters
+    model = create_model(config)
+    rng = jax.random.PRNGKey(42)
+    params = initialize_model(model, rng)
+    
+    param_count = count_parameters(params)
+    param_summary = get_parameter_summary(params)
+    
+    print(f"Model parameter count: {param_count:,}")
+    print(f"Memory estimate: {param_summary['memory_estimate_mb']:.2f} MB")
+    
+    # Test checkpoint manager
+    with tempfile.TemporaryDirectory() as temp_dir:
+        manager = ModelCheckpointManager(temp_dir)
+        
+        # Create dummy training state
+        from flax.training import train_state
+        import optax
+        
+        tx = optax.adam(learning_rate=1e-4)
+        state = train_state.TrainState.create(
+            apply_fn=model.apply,
+            params=params,
+            tx=tx
+        )
+        
+        # Save checkpoint
+        checkpoint_path = manager.save_checkpoint(
+            state=state,
+            step=1000,
+            config=config,
+            metrics={'accuracy': 0.85, 'loss': 0.3},
+            is_best=True
+        )
+        
+        print(f"Saved checkpoint to: {checkpoint_path}")
+        
+        # Load checkpoint
+        loaded_params, metadata = manager.load_checkpoint(checkpoint_path)
+        print(f"Loaded checkpoint: {metadata.model_name} v{metadata.model_version}")
+        print(f"Training steps: {metadata.training_steps}")
+        print(f"Metrics: {metadata.performance_metrics}")

@@ -212,6 +212,353 @@ class IsotonicCalibration:
             Calibrated probabilities
         """
         if not self.is_fitted:
+            logger.warning("Isotonic calibration not fitted, returning original probabilities")
+            return probabilities
+        
+        return self.isotonic.transform(probabilities)
+
+
+class ConfidenceEstimator:
+    """
+    Estimates prediction confidence using various methods.
+    """
+    
+    def __init__(self):
+        """Initialize confidence estimator."""
+        pass
+    
+    def entropy_confidence(self, probabilities: np.ndarray) -> np.ndarray:
+        """
+        Compute confidence based on entropy.
+        
+        Lower entropy = higher confidence
+        
+        Args:
+            probabilities: Prediction probabilities
+            
+        Returns:
+            Confidence scores (0-1, higher is more confident)
+        """
+        # Clip probabilities to avoid log(0)
+        probs = np.clip(probabilities, 1e-10, 1 - 1e-10)
+        
+        # For binary classification
+        if probs.ndim == 1 or probs.shape[-1] == 1:
+            # Binary case
+            p = probs.flatten()
+            entropy = -(p * np.log(p) + (1 - p) * np.log(1 - p))
+            max_entropy = -2 * 0.5 * np.log(0.5)  # log(2)
+            confidence = 1 - (entropy / max_entropy)
+        else:
+            # Multi-class case
+            entropy = -np.sum(probs * np.log(probs), axis=-1)
+            max_entropy = np.log(probs.shape[-1])
+            confidence = 1 - (entropy / max_entropy)
+        
+        return confidence
+    
+    def max_probability_confidence(self, probabilities: np.ndarray) -> np.ndarray:
+        """
+        Use maximum probability as confidence.
+        
+        Args:
+            probabilities: Prediction probabilities
+            
+        Returns:
+            Confidence scores (max probability)
+        """
+        if probabilities.ndim == 1:
+            # Binary case - use max of p and 1-p
+            return np.maximum(probabilities, 1 - probabilities)
+        else:
+            # Multi-class case - use max probability
+            return np.max(probabilities, axis=-1)
+    
+    def margin_confidence(self, probabilities: np.ndarray) -> np.ndarray:
+        """
+        Use margin between top two probabilities as confidence.
+        
+        Args:
+            probabilities: Prediction probabilities
+            
+        Returns:
+            Confidence scores (margin between top 2 predictions)
+        """
+        if probabilities.ndim == 1:
+            # Binary case - margin is |p - 0.5| * 2
+            return np.abs(probabilities - 0.5) * 2
+        else:
+            # Multi-class case - margin between top 2
+            sorted_probs = np.sort(probabilities, axis=-1)
+            return sorted_probs[:, -1] - sorted_probs[:, -2]
+    
+    def temperature_scaled_confidence(
+        self, 
+        logits: np.ndarray, 
+        temperature: float = 1.0
+    ) -> np.ndarray:
+        """
+        Compute confidence using temperature-scaled probabilities.
+        
+        Args:
+            logits: Model logits
+            temperature: Temperature parameter
+            
+        Returns:
+            Confidence scores
+        """
+        scaled_logits = logits / temperature
+        probabilities = 1 / (1 + np.exp(-scaled_logits))  # Sigmoid
+        return self.max_probability_confidence(probabilities)
+    
+    def compute_calibration_metrics(
+        self,
+        probabilities: np.ndarray,
+        labels: np.ndarray,
+        n_bins: int = 15
+    ) -> Dict[str, float]:
+        """
+        Compute calibration metrics.
+        
+        Args:
+            probabilities: Predicted probabilities
+            labels: True labels
+            n_bins: Number of bins for calibration
+            
+        Returns:
+            Dictionary of calibration metrics
+        """
+        # Expected Calibration Error (ECE)
+        ece = self._compute_ece(probabilities, labels, n_bins)
+        
+        # Maximum Calibration Error (MCE)
+        mce = self._compute_mce(probabilities, labels, n_bins)
+        
+        # Brier Score
+        brier_score = brier_score_loss(labels, probabilities)
+        
+        # Negative Log Likelihood
+        try:
+            nll = log_loss(labels, probabilities)
+        except ValueError:
+            nll = float('inf')
+        
+        return {
+            'ece': ece,
+            'mce': mce,
+            'brier_score': brier_score,
+            'nll': nll
+        }
+    
+    def _compute_ece(
+        self,
+        probabilities: np.ndarray,
+        labels: np.ndarray,
+        n_bins: int = 15
+    ) -> float:
+        """
+        Compute Expected Calibration Error.
+        """
+        bin_boundaries = np.linspace(0, 1, n_bins + 1)
+        bin_lowers = bin_boundaries[:-1]
+        bin_uppers = bin_boundaries[1:]
+        
+        ece = 0.0
+        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
+            # Determine which samples fall into this bin
+            in_bin = (probabilities > bin_lower) & (probabilities <= bin_upper)
+            prop_in_bin = in_bin.mean()
+            
+            if prop_in_bin > 0:
+                accuracy_in_bin = labels[in_bin].mean()
+                avg_confidence_in_bin = probabilities[in_bin].mean()
+                ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
+        
+        return float(ece)
+    
+    def _compute_mce(
+        self,
+        probabilities: np.ndarray,
+        labels: np.ndarray,
+        n_bins: int = 15
+    ) -> float:
+        """
+        Compute Maximum Calibration Error.
+        """
+        bin_boundaries = np.linspace(0, 1, n_bins + 1)
+        bin_lowers = bin_boundaries[:-1]
+        bin_uppers = bin_boundaries[1:]
+        
+        max_error = 0.0
+        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
+            in_bin = (probabilities > bin_lower) & (probabilities <= bin_upper)
+            prop_in_bin = in_bin.mean()
+            
+            if prop_in_bin > 0:
+                accuracy_in_bin = labels[in_bin].mean()
+                avg_confidence_in_bin = probabilities[in_bin].mean()
+                bin_error = np.abs(avg_confidence_in_bin - accuracy_in_bin)
+                max_error = max(max_error, bin_error)
+        
+        return float(max_error)
+
+
+class CalibrationEvaluator:
+    """
+    Comprehensive calibration evaluation and visualization.
+    """
+    
+    def __init__(self):
+        self.confidence_estimator = ConfidenceEstimator()
+    
+    def evaluate_calibration(
+        self,
+        logits: np.ndarray,
+        labels: np.ndarray,
+        methods: List[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Evaluate calibration using multiple methods.
+        
+        Args:
+            logits: Model logits
+            labels: True labels
+            methods: List of calibration methods to try
+            
+        Returns:
+            Dictionary of results for each method
+        """
+        if methods is None:
+            methods = ['temperature', 'platt', 'isotonic']
+        
+        # Convert logits to probabilities
+        uncalibrated_probs = 1 / (1 + np.exp(-logits))
+        
+        results = {
+            'uncalibrated': {
+                'probabilities': uncalibrated_probs,
+                'metrics': self.confidence_estimator.compute_calibration_metrics(
+                    uncalibrated_probs, labels
+                )
+            }
+        }
+        
+        # Temperature scaling
+        if 'temperature' in methods:
+            temp_scaler = TemperatureScaling()
+            temp_scaler.fit(logits, labels)
+            temp_probs = temp_scaler.transform(logits)
+            
+            results['temperature'] = {
+                'probabilities': temp_probs,
+                'temperature': temp_scaler.temperature,
+                'metrics': self.confidence_estimator.compute_calibration_metrics(
+                    temp_probs, labels
+                )
+            }
+        
+        # Platt scaling
+        if 'platt' in methods:
+            platt_scaler = PlattScaling()
+            platt_scaler.fit(logits, labels)
+            platt_probs = platt_scaler.transform(logits)
+            
+            results['platt'] = {
+                'probabilities': platt_probs,
+                'parameters': (platt_scaler.A, platt_scaler.B),
+                'metrics': self.confidence_estimator.compute_calibration_metrics(
+                    platt_probs, labels
+                )
+            }
+        
+        # Isotonic regression
+        if 'isotonic' in methods:
+            isotonic_scaler = IsotonicCalibration()
+            isotonic_scaler.fit(uncalibrated_probs, labels)
+            isotonic_probs = isotonic_scaler.transform(uncalibrated_probs)
+            
+            results['isotonic'] = {
+                'probabilities': isotonic_probs,
+                'metrics': self.confidence_estimator.compute_calibration_metrics(
+                    isotonic_probs, labels
+                )
+            }
+        
+        return results
+    
+    def plot_calibration_curve(
+        self,
+        probabilities: np.ndarray,
+        labels: np.ndarray,
+        n_bins: int = 10,
+        title: str = "Calibration Curve"
+    ):
+        """
+        Plot calibration curve (reliability diagram).
+        
+        Args:
+            probabilities: Predicted probabilities
+            labels: True labels
+            n_bins: Number of bins
+            title: Plot title
+        """
+        bin_boundaries = np.linspace(0, 1, n_bins + 1)
+        bin_lowers = bin_boundaries[:-1]
+        bin_uppers = bin_boundaries[1:]
+        
+        accuracies = []
+        confidences = []
+        bin_sizes = []
+        
+        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
+            in_bin = (probabilities > bin_lower) & (probabilities <= bin_upper)
+            prop_in_bin = in_bin.mean()
+            
+            if prop_in_bin > 0:
+                accuracy_in_bin = labels[in_bin].mean()
+                avg_confidence_in_bin = probabilities[in_bin].mean()
+                accuracies.append(accuracy_in_bin)
+                confidences.append(avg_confidence_in_bin)
+                bin_sizes.append(prop_in_bin)
+            else:
+                accuracies.append(0)
+                confidences.append((bin_lower + bin_upper) / 2)
+                bin_sizes.append(0)
+        
+        plt.figure(figsize=(8, 6))
+        plt.scatter(confidences, accuracies, s=[s * 1000 for s in bin_sizes], alpha=0.7)
+        plt.plot([0, 1], [0, 1], 'k--', label='Perfect calibration')
+        plt.xlabel('Mean Predicted Probability')
+        plt.ylabel('Fraction of Positives')
+        plt.title(title)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Add ECE to the plot
+        ece = self.confidence_estimator.compute_calibration_metrics(
+            probabilities, labels, n_bins
+        )['ece']
+        plt.text(0.02, 0.98, f'ECE: {ece:.3f}', 
+                transform=plt.gca().transAxes, 
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        
+        plt.tight_layout()
+        return plt.gcf()
+        self.is_fitted = True
+        logger.info("Isotonic calibration fitted")
+    
+    def transform(self, probabilities: np.ndarray) -> np.ndarray:
+        """
+        Apply isotonic calibration.
+        
+        Args:
+            probabilities: Input probabilities
+            
+        Returns:
+            Calibrated probabilities
+        """
+        if not self.is_fitted:
             raise RuntimeError("Isotonic calibration not fitted")
         
         return self.isotonic.transform(probabilities)
