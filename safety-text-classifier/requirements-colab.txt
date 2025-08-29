@@ -1,0 +1,40 @@
+# Google Colab Requirements - GPU Optimized for uv
+# Use this file for training in Google Colab with GPU support
+# Compatible with uv package manager
+
+# Core ML Framework - Fixed versions for binary compatibility
+numpy==1.24.4  # Pin exact version to avoid binary incompatibility
+# JAX GPU version will be installed separately via uv with CUDA index
+jax[cpu]==0.4.28  # Fallback, GPU version installed dynamically
+flax==0.8.4
+optax==0.2.2
+
+# Data and Text Processing (minimal for Colab)
+datasets==2.19.1
+transformers==4.40.2
+sentence-transformers==2.7.0
+tokenizers==0.15.2  # Compatible with transformers 4.40.2
+pandas==2.0.3
+
+# Experiment Tracking
+wandb==0.17.0  # More stable version for Colab
+
+# Visualization (lightweight versions for Colab)
+matplotlib==3.7.5  # Compatible with numpy 1.24.4
+seaborn==0.12.2
+
+# Evaluation and Metrics
+scikit-learn==1.3.2  # Compatible with numpy 1.24.4
+scipy==1.10.1  # Compatible with numpy 1.24.4
+
+# Utilities
+tqdm==4.66.4
+pyyaml==6.0.1
+
+# Note: Excluded from Colab (pre-installed or not needed):
+# - google-colab (pre-installed)
+# - jupyter (pre-installed in Colab)
+# - gradio/streamlit (use Colab widgets instead)
+# - fastapi/uvicorn (not needed for training)
+# - google-cloud-storage (use Drive integration)
+# - development tools (pytest, black, flake8)
