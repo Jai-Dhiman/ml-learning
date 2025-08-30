@@ -3,7 +3,7 @@
 # Compatible with uv package manager
 
 # Core ML Framework - Fixed versions for binary compatibility
-numpy==1.24.4  # Pin exact version to avoid binary incompatibility
+numpy==1.26.4  # Pin exact version to avoid binary incompatibility
 # JAX GPU version will be installed separately via uv with CUDA index
 jax[cpu]==0.4.28  # Fallback, GPU version installed dynamically
 flax==0.8.4
