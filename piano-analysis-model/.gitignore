@@ -2,7 +2,6 @@ PercePiano/
 piano_ml_env/
 .claude/
 CLAUDE.md
-docs/
 my_implementation/
 
 models/
