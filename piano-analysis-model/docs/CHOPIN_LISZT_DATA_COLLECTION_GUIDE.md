@@ -15,41 +15,6 @@
 - **Target**: 300-500 performances (robust training)
 - **Goal**: 10-15 different interpreters per piece
 
-## Recommended Repertoire
-
-### Chopin Selection (Perceptual Diversity)
-
-```
-Technical/Virtuosic:
-- Etude Op.10 No.1 (arpeggios - articulation focus)
-- Etude Op.10 No.4 (velocity - timing precision)
-- Etude Op.25 No.6 (thirds - dynamic control)
-
-Lyrical/Expressive:
-- Nocturne Op.9 No.2 (rubato - timing flexibility)
-- Nocturne Op.27 No.2 (pedaling - sustain effects)
-- Ballade No.1 Op.23 (narrative - musical expression)
-
-Rhythmic/Dance:
-- Waltz Op.64 No.2 (tempo stability)
-- Polonaise Op.53 (articulation contrasts)
-- Mazurka Op.17 No.4 (folk characteristics)
-```
-
-### Liszt Selection (Extended Techniques)
-
-```
-Transcendental Difficulty:
-- Hungarian Rhapsody No.2 (dramatic contrasts)
-- Transcendental Etude No.10 "Allegro" (velocity/power)
-- La Campanella (precision/lightness)
-
-Lyrical Works:
-- Liebestraum No.3 (legato/pedaling)
-- Consolation No.3 (tone quality)
-- Un Sospiro (voicing/balance)
-```
-
 ## Recording Sources & Quality Guidelines
 
 ### 1. YouTube Concert Recordings
@@ -109,15 +74,28 @@ ffmpeg -i input.wav -ar 22050 -ac 1 output.wav
 
 ### 2. Segmentation Strategy
 
-```python
-# Based on your preprocessing pipeline:
-segment_length = 3.0  # seconds
-overlap = 0.5        # 50% overlap for more training data
+Based on PercePiano research findings:
 
-# Generate segments per performance:
-# - 2-3 minute piece → ~8-12 segments
-# - Provides multiple training examples per performance
+```python
+# Level 1: Short segments for technical features
+short_segment_length = 3.0   # seconds - for timing, articulation
+short_overlap = 0.5          # 50% overlap
+
+# Level 2: Longer segments for musical interpretation  
+long_segment_length = 12.0   # seconds - for phrasing, expression
+long_overlap = 0.25          # 25% overlap
+
+# Musical phrase boundaries (preferred when detectable):
+# - 4 bars ≈ 8-12 seconds
+# - 8 bars ≈ 15-25 seconds  
+# - Use beat tracking to align with musical structure when possible
 ```
+
+**Segmentation Priority:**
+
+1. **Musical phrases** (when identifiable) - most meaningful units
+2. **Fixed-length segments** - for consistent processing
+3. **Overlap strategy** - ensures no musical content is lost
 
 ### 3. Quality Control Checklist
 
@@ -131,18 +109,60 @@ overlap = 0.5        # 50% overlap for more training data
 
 ### 1. Perceptual Dimensions (19 total)
 
-Based on PercePiano research:
+**Hierarchical Organization (Based on PercePiano Research):**
 
+**Low-Level Features (3-5 second segments):**
+
+```python
+Timing:
+- Stable ←→ Unstable
+
+Articulation:
+- Short ←→ Long
+- Soft-cushioned ←→ Hard-solid
 ```
-Timing: Stable ←→ Unstable
-Articulation: Short/Soft ←→ Long/Hard  
-Pedal: Dry/Clean ←→ Wet/Blurred
-Timbre: Even/Shallow/Bright/Soft ←→ Colorful/Rich/Dark/Loud
-Dynamics: Mellow/Small ←→ Raw/Large Range
-Musical: Fast/Flat/Unbalanced/Pure ←→ Slow/Spacious/Balanced/Expressive
-Emotion: Pleasant/Low Energy/Honest ←→ Dark/High Energy/Imaginative
-Interpretation: Poor ←→ Convincing
+
+**Mid-Level Features (8-12 second segments):**
+
+```python
+Pedal:
+- Sparse-dry ←→ Saturated-wet
+- Clean ←→ Blurred
+
+Timbre:
+- Even ←→ Colorful
+- Shallow ←→ Rich
+- Bright ←→ Dark
+- Soft ←→ Loud
+
+Dynamics:
+- Sophisticated-mellow ←→ Raw-crude
+- Little dynamic range ←→ Large dynamic range
 ```
+
+**High-Level Features (12+ second segments):**
+
+```python
+Music Making:
+- Fast-paced ←→ Slow-paced
+- Flat ←→ Spacious
+- Disproportioned ←→ Balanced
+- Pure ←→ Dramatic-expressive
+
+Emotion & Mood:
+- Optimistic-pleasant ←→ Dark
+- Low Energy ←→ High Energy
+- Honest ←→ Imaginative
+
+Interpretation:
+- Unsatisfactory-doubtful ←→ Convincing
+```
+
+**Key Insights from PercePiano:**
+
+- Use **bipolar scales** (7-point: 1=strongly Option A, 7=strongly Option B)
+- Features organized by **analysis window length** needed for judgment
+- Include "uncertain/don't know" option for difficult cases
 
 ### 2. Rating Interface Setup
 
@@ -167,11 +187,29 @@ def create_rating_interface(audio_segment, segment_id):
     return audio_player, sliders
 ```
 
-### 3. Consistency Checks
+### 3. Validation Strategy (Based on PercePiano Findings)
 
-- Rate same segment twice (separated by time)
-- Target consistency: >0.8 correlation with your previous ratings
-- Include some PercePiano segments as calibration anchors
+**Primary Approach: Self-Evaluation with Validation**
+
+PercePiano found individual musical perception is subjective, but consensus emerges through averaging multiple experts. For your project:
+
+**Phase 1: Consistent Self-Annotation**
+
+- Rate all segments yourself first for consistency
+- Include 2-3 "anchor" segments per rating session for calibration
+- Rate same segment twice (separated by sessions) - target >0.8 correlation
+
+**Phase 2: External Validation**
+
+- Recruit 2-3 other pianists to rate subset (20-30 segments)
+- Compare their ratings with yours to identify systematic biases
+- Focus validation on segments where you felt uncertain
+
+**Quality Controls:**
+
+- Include "uncertain/don't know" option (PercePiano: 7.3% of responses)
+- Document detailed rating guidelines like PercePiano
+- Take breaks between rating sessions to maintain consistency
 
 ## Implementation Timeline
 
@@ -207,11 +245,21 @@ def create_rating_interface(audio_segment, segment_id):
 
 ### Challenge: Labeling Fatigue
 
-**Solution**: Rate in 30-minute sessions, max 20 segments per session
+**Solution**: Rate in 30-minute sessions, max 15 segments per session (PercePiano standard)
 
 ### Challenge: Consistency Across Sessions  
 
-**Solution**: Include 2-3 "anchor" segments per session for calibration
+**Solution**: Include 2-3 "anchor" segments per session + uncertainty tracking
+
+### Challenge: Subjectivity in Musical Perception
+
+**PercePiano Finding**: Individual ratings have "poor" reliability, but averaged ratings show "excellent" reliability
+**Solution**: Start with self-evaluation, then validate subset with other musicians
+
+### Challenge: Segment Length vs. Feature Type
+
+**New Challenge**: Different features need different analysis windows
+**Solution**: Use hierarchical segmentation (3-5s for technical, 12s+ for interpretive)
 
 ### Challenge: Copyright Issues
 
@@ -225,17 +273,37 @@ def create_rating_interface(audio_segment, segment_id):
 
 ### Dataset Quality
 
-- **Size**: 300+ labeled segments
-- **Diversity**: 10+ different performers per major piece  
+- **Size**: 300+ labeled segments (both short and long segments)
+- **Diversity**: 5-10 different performers per Chopin Etude (focused approach)  
 - **Consistency**: Self-correlation >0.8 on repeat ratings
-- **Coverage**: All 19 perceptual dimensions adequately represented
+- **Coverage**: All 19 perceptual dimensions with appropriate segment lengths
+- **Validation**: External validation on 10-20% of segments
 
-### Model Performance
+### Model Performance (Based on PercePiano Benchmarks)
 
-- **Correlation**: >0.6 average across dimensions (vs 0.5+ on synthetic)
+- **Correlation**: >0.6 average across dimensions
+- **Feature-Level Performance**: Different targets for different feature types
+  - Technical features (timing): >0.7 correlation
+  - Musical features (dynamics): >0.6 correlation  
+  - Interpretive features (convincingness): >0.5 correlation
 - **Generalization**: Test on held-out performers/pieces
-- **Comparison**: Competitive with PercePiano baseline results
+- **Comparison**: Competitive with PercePiano results on similar features
+
+### Key Advantages of Your Approach
+
+✅ **Chopin Focus**: Stylistically consistent dataset vs PercePiano's multi-composer approach
+✅ **Etude Selection**: Technical studies provide clear performance variation
+✅ **Self-Annotation**: Consistent standards across all ratings
+✅ **Expandability**: Framework designed for future growth
 
 ---
 
-*Ready to begin systematic data collection for robust Chopin/Liszt performance analysis!* 🎼
+## Additional Resources
+
+**PercePiano Dataset Access**:
+
+- Paper: "Piano performance evaluation dataset with multilevel perceptual features" (Scientific Reports, 2024)
+- Dataset: DOI 10.5281/zenodo.13269613
+- Code: <https://github.com/JonghoKimSNU/PercePiano>
+
+*Ready to begin systematic data collection with state-of-the-art methodology!* 🎼

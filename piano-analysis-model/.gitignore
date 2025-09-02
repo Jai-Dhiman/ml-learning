@@ -7,3 +7,5 @@ my_implementation/
 models/
 __pycache__/
 results/
+
+.venv/
