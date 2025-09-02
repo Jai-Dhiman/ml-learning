@@ -65,7 +65,7 @@ def check_gpu_availability():
         import jax
         
         devices = jax.devices()
-        gpu_devices = [d for d in devices if "gpu" in str(d).lower()]
+        gpu_devices = [d for d in devices if "gpu" in str(d).lower() or "cuda" in str(d).lower()]
         
         if gpu_devices:
             logger.info(f"✅ GPU detected: {gpu_devices}")

@@ -158,7 +158,18 @@ class PositionalEncoding(nn.Module):
 
     def __call__(self, x):
         seq_len = x.shape[1]
-        return x + self.pe[:seq_len]
+        # Handle sequences longer than max_length by creating pe on-the-fly
+        if seq_len > self.max_length:
+            position = jnp.arange(seq_len)[:, None]
+            div_term = jnp.exp(
+                jnp.arange(0, self.embed_dim, 2) * -(jnp.log(10000.0) / self.embed_dim)
+            )
+            pe = jnp.zeros((seq_len, self.embed_dim))
+            pe = pe.at[:, 0::2].set(jnp.sin(position * div_term))
+            pe = pe.at[:, 1::2].set(jnp.cos(position * div_term))
+            return x + pe
+        else:
+            return x + self.pe[:seq_len]
 
 
 class SafetyTransformer(nn.Module):
@@ -298,7 +309,7 @@ def create_model(config: dict) -> SafetyTransformer:
 def initialize_model(
     model: SafetyTransformer,
     rng_key: jax.random.PRNGKey,
-    input_shape: Tuple[int, int] = (1, 512),
+    input_shape: Optional[Tuple[int, int]] = None,
 ) -> Any:
     """
     Initialize model parameters.
@@ -306,11 +317,14 @@ def initialize_model(
     Args:
         model: SafetyTransformer model
         rng_key: Random key for initialization
-        input_shape: Shape of input (batch_size, seq_len)
+        input_shape: Shape of input (batch_size, seq_len). If None, uses model's max_sequence_length
 
     Returns:
         Initialized model parameters
     """
+    if input_shape is None:
+        input_shape = (1, model.max_sequence_length)
+    
     dummy_input = jnp.ones(input_shape, dtype=jnp.int32)
     params = model.init(rng_key, dummy_input, training=False)
     return params
