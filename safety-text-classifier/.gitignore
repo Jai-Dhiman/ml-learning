@@ -45,7 +45,6 @@ checkpoints/
 *.joblib
 
 # Data
-data/
 datasets/
 *.csv
 *.json
