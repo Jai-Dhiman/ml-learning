@@ -151,7 +151,7 @@ class PositionalEncoding(nn.Module):
         )
 
         pe = jnp.zeros((self.max_length, self.embed_dim))
-        pe = pe.at[:, 0::2].set(jnp.sin(position * div_term))
+        pe = pe.at[:, ::2].set(jnp.sin(position * div_term))
         pe = pe.at[:, 1::2].set(jnp.cos(position * div_term))
 
         self.pe = pe
@@ -165,7 +165,7 @@ class PositionalEncoding(nn.Module):
                 jnp.arange(0, self.embed_dim, 2) * -(jnp.log(10000.0) / self.embed_dim)
             )
             pe = jnp.zeros((seq_len, self.embed_dim))
-            pe = pe.at[:, 0::2].set(jnp.sin(position * div_term))
+            pe = pe.at[:, ::2].set(jnp.sin(position * div_term))
             pe = pe.at[:, 1::2].set(jnp.cos(position * div_term))
             return x + pe
         else:
@@ -326,7 +326,7 @@ def initialize_model(
         input_shape = (1, model.max_sequence_length)
     
     dummy_input = jnp.ones(input_shape, dtype=jnp.int32)
-    params = model.init(rng_key, dummy_input, training=False)
+    params = model.init({'params': rng_key}, dummy_input)
     return params
 
 

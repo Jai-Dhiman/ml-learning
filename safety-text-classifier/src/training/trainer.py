@@ -315,6 +315,24 @@ class SafetyTrainer:
         
         return aggregated_metrics
     
+    def load_checkpoint(self, checkpoint_path: str = None):
+        """Load model checkpoint."""
+        checkpoint_dir = os.path.abspath(self.config['paths']['checkpoint_dir'])
+        
+        if checkpoint_path:
+            # Load specific checkpoint
+            self.state = checkpoints.restore_checkpoint(checkpoint_path, self.state)
+        else:
+            # Load best checkpoint
+            best_path = os.path.join(checkpoint_dir, 'best')
+            if os.path.exists(best_path):
+                self.state = checkpoints.restore_checkpoint(best_path, self.state)
+                print(f"✅ Loaded best checkpoint from {best_path}")
+            else:
+                # Fallback to latest checkpoint
+                self.state = checkpoints.restore_checkpoint(checkpoint_dir, self.state)
+                print(f"✅ Loaded latest checkpoint from {checkpoint_dir}")
+    
     def save_checkpoint(self, step: int, is_best: bool = False):
         """Save model checkpoint."""
         checkpoint_dir = os.path.abspath(self.config['paths']['checkpoint_dir'])
