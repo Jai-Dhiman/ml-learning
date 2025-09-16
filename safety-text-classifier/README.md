@@ -5,6 +5,7 @@
 ## Project Overview
 
 This project implements a transformer-based safety text classifier that detects harmful content across multiple categories:
+
 - Hate speech and harassment
 - Self-harm instructions
 - Dangerous advice and misinformation

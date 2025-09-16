@@ -10,6 +10,7 @@
 This is Stage 2 of the Constitutional AI research project, implementing the supervised fine-tuning phase that directly parallels the SL (Supervised Learning) stage in Anthropic's Constitutional AI paper. This stage teaches models to follow human preferences through demonstration, establishing the baseline helpfulness that constitutional training will later build upon.
 
 **Constitutional AI Research Pipeline:**
+
 - **Stage 1:** Safety Text Classifier ✓ - Safety evaluation foundation established
 - **Stage 2 (This Stage):** Helpful Response Fine-tuning - Supervised behavior shaping (SL phase)
 - **Stage 3:** Critique and Revision System - Constitutional feedback loops (CAI phase preparation)
@@ -18,12 +19,14 @@ This is Stage 2 of the Constitutional AI research project, implementing the supe
 This stage implements the crucial supervised learning foundation where models learn helpful behavior from human demonstrations, creating the behavioral baseline that constitutional training will refine.
 
 ### Stage 2 Learning Objectives
+
 - **Supervised Fine-tuning Mastery:** Implement parameter-efficient training techniques used in constitutional AI
 - **Behavior Shaping Understanding:** Learn how training data shapes model responses and capabilities
 - **Transfer Learning Expertise:** Master adaptation of pre-trained models for specific behavioral objectives
 - **Constitutional AI SL Phase:** Build the supervised learning foundation required for constitutional training
 
 ### Technical Learning Goals (Constitutional AI Context)
+
 - **LoRA Implementation:** Parameter-efficient fine-tuning techniques essential for constitutional experiments
 - **Helpfulness Optimization:** Design loss functions and training objectives for beneficial AI behavior
 - **Model Comparison Infrastructure:** Systems for evaluating fine-tuned vs. base model performance
@@ -39,12 +42,14 @@ This stage implements the crucial supervised learning foundation where models le
 This stage implements the Supervised Learning (SL) phase from Anthropic's Constitutional AI paper, where models are first trained to be helpful through human feedback before constitutional training begins. This is critical because:
 
 **Constitutional AI SL Phase Implementation:**
+
 - **Baseline Helpfulness:** Constitutional AI requires models to first be helpful before learning constitutional principles
 - **Human Preference Learning:** Models must understand human preferences as foundation for constitutional training
 - **Behavioral Shaping:** Supervised fine-tuning teaches response patterns that constitutional training will later refine
 - **Evaluation Infrastructure:** Need robust comparison systems to measure fine-tuning effectiveness
 
 **Research Pipeline Integration:**
+
 - **Stage 1 Safety Tools:** Use safety classifier from Stage 1 to evaluate fine-tuned model safety
 - **Stage 3 Preparation:** Helpful models from this stage become input to constitutional critique-revision training
 - **Stage 4 Foundation:** Supervised fine-tuning techniques directly transfer to constitutional training methodology
@@ -63,6 +68,7 @@ Upon completion, learners will have implemented the supervised learning foundati
 ### 1.3 Scope Definition (Constitutional AI Focused)
 
 **In Scope:**
+
 - Parameter-efficient fine-tuning (LoRA, adapters) essential for constitutional training
 - Helpfulness evaluation methodology that parallels constitutional assessment
 - Multi-model comparison infrastructure for constitutional AI experiments
@@ -70,6 +76,7 @@ Upon completion, learners will have implemented the supervised learning foundati
 - Behavioral analysis tools for understanding model response patterns
 
 **Out of Scope:**
+
 - Full constitutional training (reserved for Stage 4)
 - Reinforcement learning from human feedback (RLHF/RLAIF comes in Stage 4)
 - Constitutional principle implementation (Stage 3-4 focus)
@@ -86,6 +93,7 @@ Upon completion, learners will have implemented the supervised learning foundati
 JAX/Flax serves as the foundation for all constitutional training experiments, with this stage building essential patterns:
 
 **Research-Focused Features:**
+
 - **Experiment Reproducibility:** Deterministic training for consistent constitutional training comparisons
 - **Parameter Efficiency:** LoRA and adapter implementations essential for constitutional fine-tuning
 - **Gradient Analysis:** Tools for understanding training dynamics crucial for constitutional optimization
@@ -97,6 +105,7 @@ JAX/Flax serves as the foundation for all constitutional training experiments, w
 LoRA (Low-Rank Adaptation) is essential for constitutional training as it enables efficient adaptation of large models with limited computational resources.
 
 **Implementation Requirements:**
+
 - **LoRA Layer Integration:** Seamless integration with transformer architectures
 - **Rank Experimentation:** Systematic evaluation of different rank parameters
 - **Merge and Unmerge:** Ability to combine and separate LoRA weights for model comparison
@@ -108,12 +117,14 @@ LoRA (Low-Rank Adaptation) is essential for constitutional training as it enable
 Training data must parallel the human preference demonstrations used in constitutional AI's supervised learning phase.
 
 **Dataset Requirements:**
+
 - **Conversational Format:** Question-answer pairs similar to constitutional AI training
 - **Quality Filtering:** High-quality demonstrations of helpful behavior
 - **Diversity Coverage:** Broad range of query types for robust helpfulness learning
 - **Safety Integration:** Use Stage 1 safety classifier to ensure training data quality
 
 **Sources:**
+
 - OpenAssistant conversations dataset
 - Anthropic's helpful/harmless datasets (where available)
 - High-quality StackOverflow Q&A pairs
@@ -125,6 +136,7 @@ Training data must parallel the human preference demonstrations used in constitu
 Robust comparison systems essential for evaluating constitutional training effectiveness in later stages.
 
 **Comparison Requirements:**
+
 - **Multi-Model Serving:** Simultaneous deployment of base, fine-tuned, and (later) constitutional models
 - **Response Analysis:** Detailed comparison of model outputs across different training stages
 - **Metric Tracking:** Comprehensive evaluation of helpfulness, safety, and capability preservation
@@ -136,6 +148,7 @@ Robust comparison systems essential for evaluating constitutional training effec
 Build on Stage 1 infrastructure with constitutional training-specific optimizations:
 
 **Enhanced Features:**
+
 - **Multi-Experiment Management:** Parallel training of different fine-tuning configurations
 - **Hyperparameter Optimization:** Automated search for optimal constitutional training parameters
 - **Resource Scaling:** Efficient GPU utilization for rapid constitutional training iterations
@@ -148,12 +161,14 @@ Build on Stage 1 infrastructure with constitutional training-specific optimizati
 ### 3.1 Constitutional AI Research Interface
 
 **Multi-Model Comparison Dashboard:**
+
 - **Side-by-side Evaluation:** Compare base model vs. fine-tuned responses in real-time
 - **Helpfulness Scoring:** Quantitative measures of response quality and usefulness
 - **Safety Integration:** Use Stage 1 safety classifier to evaluate both models
 - **Response Analysis:** Detailed breakdown of improvements and limitations
 
 **Training Progress Monitoring:**
+
 - **Real-time Metrics:** Training loss, validation accuracy, helpfulness scores
 - **Comparative Visualization:** Performance trends relative to base model
 - **Hyperparameter Tracking:** Complete experimental configuration logging
@@ -162,12 +177,14 @@ Build on Stage 1 infrastructure with constitutional training-specific optimizati
 ### 3.2 Research and Evaluation Interface
 
 **Helpfulness Evaluation Framework:**
+
 - **Automated Metrics:** BLEU, ROUGE, and custom helpfulness scoring
 - **Human Evaluation:** Interface for collecting human preference judgments
 - **Comparative Analysis:** Statistical comparison of model performance
 - **Constitutional Metrics Preparation:** Evaluation frameworks adaptable to constitutional principles
 
 **Experiment Management:**
+
 - **Configuration Management:** Systematic tracking of training hyperparameters
 - **Result Comparison:** Side-by-side analysis of different fine-tuning approaches
 - **Reproducibility Tools:** Complete experiment recreation capabilities
@@ -176,6 +193,7 @@ Build on Stage 1 infrastructure with constitutional training-specific optimizati
 ### 3.3 Educational Integration Features
 
 **Constitutional AI Learning Path:**
+
 - **Supervised Learning Theory:** Interactive explanations of preference learning
 - **Fine-tuning Visualization:** Step-by-step training process demonstration
 - **Parameter Efficiency:** Visual understanding of LoRA and adapter techniques
@@ -191,12 +209,14 @@ Build on Stage 1 infrastructure with constitutional training-specific optimizati
 Training data structure that parallels constitutional AI's supervised learning phase:
 
 **Dataset Composition:**
+
 - **Question-Answer Pairs:** 100,000+ high-quality conversational examples
 - **Helpfulness Labels:** Human-rated responses for training objective optimization
 - **Difficulty Levels:** Range from simple factual questions to complex reasoning tasks
 - **Safety Filtering:** All training data validated using Stage 1 safety classifier
 
 **Quality Standards:**
+
 - **Human Rating Agreement:** Inter-annotator agreement κ > 0.7 for helpfulness judgments
 - **Response Quality:** Minimum helpfulness threshold for all training examples
 - **Diversity Requirements:** Balanced representation across query types and domains
@@ -205,12 +225,14 @@ Training data structure that parallels constitutional AI's supervised learning p
 ### 4.2 Evaluation Methodology
 
 **Core Helpfulness Metrics:**
+
 - **Response Quality:** Human evaluation of helpfulness, informativeness, and accuracy
 - **Comparative Performance:** Systematic comparison with base model responses
 - **Safety Preservation:** Ensure fine-tuning doesn't degrade safety (using Stage 1 classifier)
 - **Capability Retention:** Verify general capabilities aren't lost during specialization
 
 **Constitutional AI Preparation Metrics:**
+
 - **Preference Learning Assessment:** How well models learn from human demonstrations
 - **Behavioral Consistency:** Stable helpful behavior across diverse queries
 - **Constitutional Readiness:** Evaluation of model's readiness for constitutional training
@@ -219,12 +241,14 @@ Training data structure that parallels constitutional AI's supervised learning p
 ### 4.3 Model Comparison Framework
 
 **Systematic Evaluation Protocol:**
+
 - **Blind Evaluation:** Human raters compare responses without knowing model identity
 - **Quantitative Metrics:** Automated scoring of response quality and helpfulness
 - **Qualitative Analysis:** Detailed examination of response characteristics
 - **Constitutional Metrics:** Evaluation dimensions that will extend to constitutional assessment
 
 **Research Validation:**
+
 - **Statistical Significance:** Robust testing of performance improvements
 - **Effect Size Analysis:** Magnitude of helpfulness improvements over base model
 - **Failure Mode Analysis:** Systematic identification of fine-tuning limitations
@@ -240,18 +264,21 @@ Training data structure that parallels constitutional AI's supervised learning p
 Gemma 7B-IT selected as primary model for constitutional training research:
 
 **Gemma 7B-IT Model Advantages:**
+
 - **Google Research Alignment:** Directly from Google DeepMind, aligning with Anthropic/Google tech stack theme
 - **Apache 2.0 License:** Full commercial freedom for portfolio deployment and research publication
 - **Instruction-Tuned:** Pre-trained for instruction-following, ideal constitutional training foundation
 - **Performance:** Competitive with LLaMA 2 7B while being more commercially friendly
 
 **Technical Specifications:**
+
 - **Parameters:** 7 billion parameters optimized for instruction-following
 - **Architecture:** Transformer-based with efficient attention mechanisms
 - **Context Length:** 8192 tokens suitable for constitutional training examples
 - **Quantization Support:** INT8/INT4 quantization for efficient deployment
 
 **Constitutional Training Compatibility:**
+
 - **LoRA Fine-tuning:** Excellent compatibility with parameter-efficient training
 - **Instruction Following:** Strong baseline for learning constitutional principles
 - **Safety Alignment:** Google's safety training provides good constitutional training foundation
@@ -263,18 +290,21 @@ Gemma 7B-IT selected as primary model for constitutional training research:
 LoRA implementation specifically optimized for Gemma architecture and constitutional training:
 
 **Gemma-Specific LoRA Configuration:**
+
 - **Target Modules:** Gemma's attention layers (q_proj, k_proj, v_proj, o_proj) and feed-forward (gate_proj, up_proj, down_proj)
 - **Optimal Rank Range:** 16-32 recommended for Gemma 7B-IT based on architecture size
 - **Alpha Parameter:** 32-64 scaling factor optimized for Gemma's pre-training scale
 - **Dropout:** 0.1 dropout for robust constitutional training generalization
 
 **Gemma Architecture Considerations:**
+
 - **RMSNorm Integration:** Proper handling of Gemma's RMSNorm instead of LayerNorm
 - **SwiGLU Activation:** Optimized LoRA for Gemma's SwiGLU activation function
 - **Rotary Positional Encoding:** LoRA compatibility with Gemma's RoPE implementation
 - **Vocabulary Size:** 256K vocabulary optimization for efficient embedding updates
 
 **Implementation Features:**
+
 - **Gemma-JAX Integration:** Native JAX/Flax implementation for Gemma model architecture
 - **Constitutional Training Optimization:** LoRA patterns specifically for constitutional principle learning
 - **Memory Efficiency:** Optimized for Gemma's parameter layout and memory access patterns
@@ -286,18 +316,21 @@ LoRA implementation specifically optimized for Gemma architecture and constituti
 Training approach optimized for Gemma architecture and constitutional AI methodology:
 
 **Gemma-Specific Training Configuration:**
+
 - **Learning Rate:** 1e-4 to 5e-4 (higher than typical due to LoRA + Gemma's training scale)
 - **Batch Size:** 64-256 with gradient accumulation optimized for Gemma's sequence length
 - **Training Steps:** 2000-8000 steps with Gemma-specific early stopping criteria
 - **Optimizer:** AdamW with β1=0.9, β2=0.999, optimized for Gemma's parameter scale
 
 **Gemma Architecture Optimizations:**
+
 - **Gradient Clipping:** 1.0 max norm to handle Gemma's gradient scale
 - **Warmup Steps:** 500 steps with linear warmup for stable Gemma LoRA training
 - **Weight Decay:** 0.01 weight decay calibrated for Gemma's parameter distribution
 - **Mixed Precision:** bfloat16 training optimized for Gemma's numerical stability
 
 **Loss Function Design (Gemma-Adapted):**
+
 - **Helpfulness Objective:** Cross-entropy loss with Gemma's vocabulary weighting
 - **Constitutional Preparation:** Loss scaling compatible with Gemma's constitutional training
 - **Safety Integration:** Stage 1 safety classifier validation for Gemma responses
@@ -313,12 +346,14 @@ Training approach optimized for Gemma architecture and constitutional AI methodo
 Build on Stage 1 infrastructure with constitutional training-specific enhancements:
 
 **Training Infrastructure:**
+
 - **Multi-GPU Support:** Distributed training for larger models and faster experiments
 - **Experiment Queuing:** Systematic scheduling of constitutional training experiments
 - **Resource Isolation:** Dedicated resources for different experimental configurations
 - **Checkpoint Synchronization:** Consistent model state management across distributed training
 
 **Serving Infrastructure:**
+
 - **Multi-Model Deployment:** Simultaneous serving of base, fine-tuned, and comparative models
 - **A/B Testing Framework:** Systematic comparison of different fine-tuning approaches
 - **Load Balancing:** Efficient distribution of requests across model variants
@@ -330,12 +365,14 @@ Build on Stage 1 infrastructure with constitutional training-specific enhancemen
 Comprehensive monitoring optimized for constitutional training preparation:
 
 **Training Metrics:**
+
 - **Helpfulness Progress:** Real-time tracking of training objective optimization
 - **Comparative Performance:** Continuous comparison with base model performance
 - **Resource Utilization:** GPU memory and compute efficiency monitoring
 - **Constitutional Readiness:** Metrics indicating model readiness for constitutional training
 
 **Inference Metrics:**
+
 - **Response Quality:** Automated evaluation of helpful response generation
 - **Safety Preservation:** Integration with Stage 1 safety classifier for continuous monitoring
 - **User Satisfaction:** Tracking of human evaluation scores and preferences
@@ -348,12 +385,14 @@ Comprehensive monitoring optimized for constitutional training preparation:
 ### 7.1 Technical Performance Metrics
 
 **Helpfulness Performance Targets:**
+
 - **Human Evaluation:** >75% preference for fine-tuned vs. base model responses
 - **Automated Metrics:** >20% improvement in helpfulness scoring functions
 - **Safety Preservation:** No degradation in Stage 1 safety classifier performance
 - **Capability Retention:** <5% decrease in general capability benchmarks
 
 **Constitutional AI Preparation Metrics:**
+
 - **Training Efficiency:** Successful LoRA fine-tuning with <10% of full parameter training cost
 - **Behavioral Consistency:** >90% consistency in helpful behavior across evaluation sets
 - **Constitutional Readiness:** Model demonstrates stable preference learning suitable for constitutional training
@@ -362,12 +401,14 @@ Comprehensive monitoring optimized for constitutional training preparation:
 ### 7.2 Research Outcome Metrics
 
 **Constitutional AI Research Preparation:**
+
 - **SL Phase Understanding:** Demonstrated mastery of supervised learning phase implementation
 - **Parameter Efficiency:** Successful implementation of techniques essential for constitutional training
 - **Evaluation Framework:** Robust methodology for assessing helpful AI behavior
 - **Experimental Design:** Research protocols suitable for constitutional AI experimentation
 
 **Documentation and Reproducibility:**
+
 - **Complete Implementation:** Fully documented fine-tuning pipeline with constitutional training preparation
 - **Reproducible Results:** Deterministic training enabling consistent constitutional training baselines
 - **Research Methodology:** Experimental protocols suitable for academic constitutional AI research
@@ -376,6 +417,7 @@ Comprehensive monitoring optimized for constitutional training preparation:
 ### 7.3 Constitutional AI Pipeline Integration
 
 **Stage Integration Success:**
+
 - **Stage 1 Safety Integration:** Seamless use of safety classifier for training data validation and model evaluation
 - **Stage 3 Preparation:** Fine-tuned models ready for constitutional critique and revision training
 - **Stage 4 Foundation:** Complete understanding and infrastructure for constitutional AI implementation
@@ -388,24 +430,28 @@ Comprehensive monitoring optimized for constitutional training preparation:
 ### 8.1 Implementation Phases
 
 **Phase 1: Foundation Setup (Weeks 1-2)**
+
 - LoRA implementation and integration with JAX/Flax
 - Helpfulness dataset curation and preprocessing
 - Enhanced training infrastructure deployment
 - **Milestone:** Working LoRA fine-tuning pipeline
 
 **Phase 2: Training Implementation (Weeks 3-4)**
+
 - Systematic hyperparameter optimization for helpfulness training
 - Multi-model comparison infrastructure development
 - Comprehensive evaluation framework implementation
 - **Milestone:** Demonstrable helpfulness improvement over base model
 
 **Phase 3: Constitutional AI Preparation (Weeks 5-6)**
+
 - Advanced evaluation methodology development
 - Research documentation and methodology establishment
 - Infrastructure optimization for constitutional training
 - **Milestone:** Complete SL phase implementation ready for constitutional training
 
 **Phase 4: Integration and Evaluation (Weeks 7-8)**
+
 - Comprehensive testing and validation
 - Stage 3 preparation and integration planning
 - Final documentation and research reporting
@@ -414,12 +460,14 @@ Comprehensive monitoring optimized for constitutional training preparation:
 ### 8.2 Constitutional AI Research Preparation
 
 **Technical Readiness:**
+
 - **LoRA Mastery:** Complete understanding of parameter-efficient fine-tuning
 - **Training Infrastructure:** Scalable system capable of constitutional training experiments
 - **Evaluation Methodology:** Robust assessment techniques for helpful AI behavior
 - **Research Skills:** Experimental design and analysis capabilities
 
 **Research Foundation:**
+
 - **SL Phase Implementation:** Complete understanding of supervised learning in constitutional AI
 - **Behavioral Evaluation:** Comprehensive methodology for assessing AI helpfulness
 - **Comparative Analysis:** Systems for evaluating training interventions
@@ -432,6 +480,7 @@ Comprehensive monitoring optimized for constitutional training preparation:
 ### 9.1 Technical Risk Management
 
 **Constitutional Training Preparation:**
+
 - **Parameter Efficiency:** Ensure LoRA implementation enables efficient constitutional training
 - **Training Stability:** Develop robust training procedures for constitutional experiments
 - **Evaluation Validity:** Create assessment methodology that transfers to constitutional evaluation
@@ -440,6 +489,7 @@ Comprehensive monitoring optimized for constitutional training preparation:
 ### 9.2 Research Success Factors
 
 **Constitutional AI Research Excellence:**
+
 - **Methodological Rigor:** Establish research protocols suitable for constitutional AI study
 - **Technical Depth:** Develop deep understanding of supervised preference learning
 - **Reproducibility:** Create deterministic systems enabling consistent constitutional training

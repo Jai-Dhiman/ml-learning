@@ -1,0 +1,9 @@
+# Colab Pro optimized settings
+training:
+  batch_size: 2
+  gradient_accumulation_steps: 8
+  max_seq_length: 256
+
+optimization:
+  use_gradient_checkpointing: true
+  clear_cache_steps: 50

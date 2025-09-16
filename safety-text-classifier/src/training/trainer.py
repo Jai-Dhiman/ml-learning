@@ -42,12 +42,13 @@ class SafetyTrainer:
     with Weights & Biases integration.
     """
     
-    def __init__(self, config_path: str = "configs/base_config.yaml"):
+    def __init__(self, config_path: str = "configs/base_config.yaml", load_only: bool = False):
         """
         Initialize the trainer with configuration.
         
         Args:
             config_path: Path to the configuration file
+            load_only: If True, skip model initialization (for loading checkpoints only)
         """
         self.config_path = config_path
         with open(config_path, 'r') as f:
@@ -62,30 +63,40 @@ class SafetyTrainer:
         
         # Setup random keys
         self.rng = jax.random.PRNGKey(42)
-        self.rng, init_rng = jax.random.split(self.rng)
         
-        # Initialize model parameters
-        self.params = initialize_model(self.model, init_rng)
-        
-        # Setup optimizer
-        self.optimizer = self._create_optimizer()
-        
-        # Initialize training state
-        self.state = TrainState.create(
-            apply_fn=self.model.apply,
-            params=self.params,
-            tx=self.optimizer,
-            epoch=0,
-            best_val_accuracy=0.0,
-            steps_since_improvement=0
-        )
-        
-        # Setup wandb
-        self._setup_wandb()
-        
-        # JIT compile training and evaluation functions
-        self.train_step = jax.jit(self._train_step)
-        self.eval_step = jax.jit(self._eval_step)
+        if not load_only:
+            # Full initialization for training
+            self.rng, init_rng = jax.random.split(self.rng)
+            
+            # Initialize model parameters
+            self.params = initialize_model(self.model, init_rng)
+            
+            # Setup optimizer
+            self.optimizer = self._create_optimizer()
+            
+            # Initialize training state
+            self.state = TrainState.create(
+                apply_fn=self.model.apply,
+                params=self.params,
+                tx=self.optimizer,
+                epoch=0,
+                best_val_accuracy=0.0,
+                steps_since_improvement=0
+            )
+            
+            # Setup wandb
+            self._setup_wandb()
+            
+            # JIT compile training and evaluation functions
+            self.train_step = jax.jit(self._train_step)
+            self.eval_step = jax.jit(self._eval_step)
+        else:
+            # Minimal initialization for loading only
+            self.params = None
+            self.optimizer = None
+            self.state = None
+            self.train_step = None
+            self.eval_step = None
     
     def _create_optimizer(self) -> optax.GradientTransformation:
         """Create the optimizer with learning rate schedule."""
@@ -318,6 +329,28 @@ class SafetyTrainer:
     def load_checkpoint(self, checkpoint_path: str = None):
         """Load model checkpoint."""
         checkpoint_dir = os.path.abspath(self.config['paths']['checkpoint_dir'])
+        
+        # If we used load_only=True, we need to initialize components first
+        if self.state is None:
+            # Initialize dummy parameters to get the right structure
+            self.rng, init_rng = jax.random.split(self.rng)
+            self.params = initialize_model(self.model, init_rng)
+            
+            # Setup optimizer
+            self.optimizer = self._create_optimizer()
+            
+            # Initialize training state
+            self.state = TrainState.create(
+                apply_fn=self.model.apply,
+                params=self.params,
+                tx=self.optimizer,
+                epoch=0,
+                best_val_accuracy=0.0,
+                steps_since_improvement=0
+            )
+            
+            # JIT compile evaluation function
+            self.eval_step = jax.jit(self._eval_step)
         
         if checkpoint_path:
             # Load specific checkpoint

@@ -1,0 +1,53 @@
+# Model configuration
+model:
+  name: "google/gemma-7b-it"
+  load_in_4bit: true
+  bnb_4bit_compute_dtype: "float16"
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_use_double_quant: true
+
+# LoRA configuration
+lora:
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+# Training configuration
+training:
+  batch_size: 4
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  num_epochs: 3
+  warmup_steps: 100
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 100
+  max_seq_length: 512
+  fp16: true
+  gradient_checkpointing: true
+  optim: "paged_adamw_8bit"
+
+# Dataset configuration
+dataset:
+  name: "Anthropic/hh-rlhf"
+  subset: "helpful-base"
+  train_split: "train[:10000]"
+  eval_split: "test[:1000]"
+
+# Safety filtering
+safety:
+  enabled: true
+  classifier_config_path: "../safety-text-classifier/configs/base_config.yaml"
+  checkpoint_dir: "../safety-text-classifier/checkpoints/best_model"
+  safety_threshold: 0.8
+  filter_unsafe: true
+  log_unsafe_samples: true
+
+# Weights & Biases
+wandb:
+  project: "stage2-helpful-finetuning"
+  entity: "jaidhiman-capture"
+  tags: ["gemma-7b", "qlora", "helpful", "colab"]

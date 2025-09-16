@@ -326,7 +326,7 @@ def initialize_model(
         input_shape = (1, model.max_sequence_length)
     
     dummy_input = jnp.ones(input_shape, dtype=jnp.int32)
-    params = model.init({'params': rng_key}, dummy_input)
+    params = model.init(rng_key, dummy_input)
     return params
 
 

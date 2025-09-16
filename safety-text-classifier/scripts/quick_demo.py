@@ -1,36 +1,58 @@
 #!/usr/bin/env python3
 """
-Quick demo test of the safety classifier
+Quick Safety Text Classifier Demo
+
+Simple baseline demo using traditional ML while we resolve JAX/Flax compatibility.
 """
 
 import sys
 import os
-sys.path.append('../src')
-
-import jax
-import jax.numpy as jnp
-import yaml
-from transformers import AutoTokenizer
-
-from src.models.transformer import create_model, initialize_model
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.multioutput import MultiOutputClassifier
 
 def quick_demo():
-    """Quick demo of safety classification"""
+    """Quick demo of safety classification using baseline model"""
     
     print("🛡️ Safety Text Classifier - Quick Demo")
     print("=" * 45)
+    print("📝 Using baseline model (resolving JAX/Flax compatibility)")
+    print()
     
-    # Load config
-    with open('../configs/base_config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
+    # Quick training data for demo
+    train_texts = [
+        # Hate speech
+        "I hate people from that group", "Those people are terrible", "They should not exist",
+        # Self harm  
+        "I want to hurt myself", "How to cut safely", "I want to end my life",
+        # Dangerous advice
+        "How to make bombs", "Poison recipe", "Make weapons at home", 
+        # Harassment
+        "I will find you", "You will pay for this", "I know where you live",
+        # Safe
+        "Beautiful weather today", "I love my family", "Cooking is fun", 
+        "Reading books", "Exercise is healthy", "Work was good"
+    ]
     
-    # Initialize tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(config['data']['tokenizer'])
+    # Labels: [hate_speech, self_harm, dangerous_advice, harassment]
+    train_labels = [
+        [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0],  # hate
+        [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0],  # self harm
+        [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0],  # dangerous
+        [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 1],  # harassment
+        [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0],  # safe
+        [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0],  # safe
+    ]
     
-    # Initialize model
-    model = create_model(config)
-    rng = jax.random.PRNGKey(42)
-    params = initialize_model(model, rng)
+    # Train baseline classifier
+    print("🚀 Training baseline classifier...")
+    vectorizer = TfidfVectorizer(max_features=500, stop_words='english')
+    X_train = vectorizer.fit_transform(train_texts)
+    classifier = MultiOutputClassifier(LogisticRegression(max_iter=200))
+    classifier.fit(X_train, train_labels)
+    print("✅ Training completed!")
+    print()
     
     # Safety categories
     categories = ['Hate Speech', 'Self-Harm', 'Dangerous Advice', 'Harassment']
@@ -46,47 +68,35 @@ def quick_demo():
     ]
     
     print("🔍 Testing Safety Classification:")
-    print("-" * 45)
+    print("-" * 50)
     
     for i, text in enumerate(test_cases, 1):
-        # Tokenize
-        encoded = tokenizer(
-            text,
-            truncation=True,
-            padding='max_length',
-            max_length=config['data']['max_length'],
-            return_tensors='np'
-        )
-        input_ids = jnp.array(encoded['input_ids'])
+        # Vectorize and predict
+        X_test = vectorizer.transform([text])
+        prediction = classifier.predict(X_test)[0]
         
-        # Predict
-        outputs = model.apply(params, input_ids, training=False)
-        probabilities = jax.nn.sigmoid(outputs['logits'])[0]  # Remove batch dim
+        # Find flagged categories
+        flagged = [categories[j] for j, flag in enumerate(prediction) if flag]
         
-        # Find max category
-        max_idx = jnp.argmax(probabilities)
-        max_prob = probabilities[max_idx]
-        max_category = categories[max_idx]
-        
-        # Determine if safe or unsafe
-        if max_prob > 0.5:
-            status = f"⚠️  UNSAFE: {max_category} ({max_prob:.1%})"
+        if flagged:
+            status = f"⚠️  UNSAFE: {', '.join(flagged)}"
         else:
-            status = f"✅ SAFE (highest: {max_category} {max_prob:.1%})"
+            status = f"✅ SAFE"
         
-        print(f"{i}. \"{text[:50]}{'...' if len(text) > 50 else ''}\"")
-        print(f"   {status}")
+        print(f"{i}. \"{text[:45]}{'...' if len(text) > 45 else ''}\"")
+        print(f"   → {status}")
         print()
     
-    print("=" * 45)
+    print("=" * 50)
     print("🎉 Quick demo completed!")
     print("")
-    print("📊 Scores shown are from UNTRAINED model")
-    print("   (Random predictions - train model for real results)")
+    print("📊 This is a BASELINE demonstration")
+    print("   Full transformer model pending JAX/Flax fix")
     print("")
     print("🚀 Next steps:")
-    print("   • Train model: python scripts/train.py") 
-    print("   • Full demo: python scripts/demo_app.py")
+    print("   • Fix JAX/Flax compatibility")
+    print("   • Train full transformer model") 
+    print("   • Achieve 85%+ accuracy target")
 
 if __name__ == "__main__":
     quick_demo()
