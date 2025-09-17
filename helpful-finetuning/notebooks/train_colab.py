@@ -56,7 +56,7 @@ if torch.cuda.is_available():
     print(torch.cuda.get_device_name(0))
 
 # Cell 5: Run training with colab overrides
-!bash -lc 'source .venv/bin/activate && uv run --with bitsandbytes==0.43.1 python -m src.training.train_qlora --config configs/base_config.yaml --override configs/colab_config.yaml'
+!bash -lc 'source .venv/bin/activate && uv run --with "jax[cpu]==0.4.38" --with "flax>=0.8.4,<0.9.0" --with "optax>=0.2.2,<0.3.0" --with bitsandbytes==0.43.1 python -m src.training.train_qlora --config configs/base_config.yaml --override configs/colab_config.yaml'
 
 # Cell 6: Evaluate a subset
-!bash -lc 'source .venv/bin/activate && uv run --with bitsandbytes==0.43.1 python -m src.evaluation.evaluate_helpfulness --config configs/base_config.yaml'
+!bash -lc 'source .venv/bin/activate && uv run --with "jax[cpu]==0.4.38" --with "flax>=0.8.4,<0.9.0" --with "optax>=0.2.2,<0.3.0" --with bitsandbytes==0.43.1 python -m src.evaluation.evaluate_helpfulness --config configs/base_config.yaml'

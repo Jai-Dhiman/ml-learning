@@ -1,9 +1,6 @@
 import os
 import sys
 import yaml
-import jax
-import jax.numpy as jnp
-from flax.training import checkpoints
 from typing import Optional
 
 # Make Stage 1 package importable
@@ -35,12 +32,27 @@ class SafetyFilter:
 
     def _load(self):
         try:
+            # Import JAX/Flax lazily and fail explicitly if unavailable
+            try:
+                import jax  # type: ignore
+                import jax.numpy as jnp  # type: ignore
+                from flax.training import checkpoints  # type: ignore
+            except Exception as ie:
+                raise RuntimeError(
+                    "SafetyFilter requires JAX/Flax to be installed. "
+                    "In Colab, run training/eval with: \n"
+                    "  uv run --with 'jax[cpu]==0.4.38' --with 'flax>=0.8.4,<0.9.0' --with 'optax>=0.2.2,<0.3.0' ..."
+                ) from ie
+
+            # Keep references for use in score_text
+            self._jax = jax
+            self._jnp = jnp
+
             with open(self.classifier_config_path, 'r') as f:
                 cfg = yaml.safe_load(f)
 
             if create_model is None:
-                print("[SafetyFilter] Stage 1 model code unavailable; safety filter disabled.")
-                return
+                raise RuntimeError("Stage 1 model code (safety-text-classifier) not importable. Ensure the repo path is correct.")
 
             self.model = create_model(cfg)
 
@@ -71,8 +83,9 @@ class SafetyFilter:
                     except Exception:
                         continue
             if found is None:
-                print(f"[SafetyFilter] No checkpoint found under {self.checkpoint_dir} or alternates; safety filter disabled.")
-                return
+                raise RuntimeError(
+                    f"No Stage 1 checkpoint found under '{self.checkpoint_dir}' or common alternates."
+                )
             else:
                 print(f"[SafetyFilter] Loaded checkpoint from: {found}")
 
@@ -90,8 +103,8 @@ class SafetyFilter:
             self.ready = True
             print("[SafetyFilter] Loaded Stage 1 safety classifier successfully.")
         except Exception as e:
-            print(f"[SafetyFilter] Failed to load safety classifier: {e}")
-            self.ready = False
+            # Fail fast, do not silently disable safety in Stage 2
+            raise
 
     def score_text(self, text: str) -> float:
         """
@@ -99,13 +112,17 @@ class SafetyFilter:
         We map multi-label outputs to a safety score by 1 - max(category_prob).
         """
         if not self.ready:
-            return 1.0
+            raise RuntimeError("SafetyFilter not ready; ensure JAX/Flax and checkpoints are available.")
         try:
             enc = self.tokenizer(
                 [text], truncation=True, padding='max_length',
                 max_length=self.tokenizer.model_max_length if self.tokenizer.model_max_length else 512,
                 return_tensors='np'
             )
+            jnp = getattr(self, '_jnp', None)
+            jax = getattr(self, '_jax', None)
+            if jnp is None or jax is None:
+                raise RuntimeError("Internal JAX refs missing; SafetyFilter initialization did not complete.")
             input_ids = jnp.array(enc['input_ids'])
             outputs = self.model.apply(self.params, input_ids, training=False)
             logits = outputs['logits'][0]
@@ -114,5 +131,4 @@ class SafetyFilter:
             safety = float(1.0 - max_risk)
             return safety
         except Exception as e:
-            print(f"[SafetyFilter] Scoring failed, defaulting to safe: {e}")
-            return 1.0
+            raise
