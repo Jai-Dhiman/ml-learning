@@ -26,6 +26,11 @@ class GemmaInference:
 
         if adapter_path:
             # Prefer loading from a local adapter directory and validate structure
+            looks_local = os.path.isabs(adapter_path) or adapter_path.startswith("./") or adapter_path.startswith("../") or adapter_path.startswith("~") or (os.sep in adapter_path)
+            if looks_local and not os.path.isdir(adapter_path):
+                raise FileNotFoundError(
+                    f"Adapter path '{adapter_path}' does not exist or is not a directory."
+                )
             if os.path.isdir(adapter_path):
                 cfg_path = os.path.join(adapter_path, "adapter_config.json")
                 if not os.path.exists(cfg_path):
@@ -37,7 +42,7 @@ class GemmaInference:
                     )
                 self.model = PeftModel.from_pretrained(self.model, adapter_path)
             else:
-                # If not a directory, attempt to treat as a remote model id
+                # If not a directory and not clearly local, attempt to treat as a remote model id
                 # (No silent fallback: invalid ids will raise clearly.)
                 self.model = PeftModel.from_pretrained(self.model, adapter_path)
 

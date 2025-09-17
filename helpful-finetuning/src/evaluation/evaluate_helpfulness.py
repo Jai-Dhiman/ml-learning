@@ -13,9 +13,10 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, set_
 
 
 class HelpfulnessEvaluator:
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str, adapter_path: str | None = None):
         with open(config_path, 'r') as f:
             self.cfg = yaml.safe_load(f)
+        self.adapter_path = adapter_path or "./lora_adapters"
         # Thresholds (can be tuned or moved to config if desired)
         self.thresholds = {
             'auto_win_rate_min': 0.60,           # automated helpfulness win rate target
@@ -106,7 +107,16 @@ class HelpfulnessEvaluator:
 
         # Load models (4-bit for both)
         base = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=None, load_in_4bit=True)
-        finetuned = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path="./lora_adapters", load_in_4bit=True)
+
+        # Fail fast: ensure adapters exist locally before attempting to load
+        adapter_dir = self.adapter_path
+        if not os.path.isdir(adapter_dir) or not os.path.exists(os.path.join(adapter_dir, 'adapter_config.json')):
+            raise FileNotFoundError(
+                f"LoRA adapters not found at '{adapter_dir}'. "
+                f"Please run training first or pass a valid --adapter_path pointing to a directory containing adapter_config.json."
+            )
+        finetuned = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=adapter_dir, load_in_4bit=True)
+
         safety = SafetyFilter(
             classifier_config_path=self.cfg['safety']['classifier_config_path'],
             checkpoint_dir=self.cfg['safety']['checkpoint_dir'],
@@ -174,7 +184,7 @@ class HelpfulnessEvaluator:
 
         # Capability retention via perplexity proxy
         ppl_base = self._compute_perplexity("google/gemma-7b-it", None, sample_pct=0.1)
-        ppl_ft = self._compute_perplexity("google/gemma-7b-it", "./lora_adapters", sample_pct=0.1)
+        ppl_ft = self._compute_perplexity("google/gemma-7b-it", adapter_dir, sample_pct=0.1)
         if np.isnan(ppl_base) or np.isnan(ppl_ft) or ppl_base <= 0.0:
             ppl_rel_degrade = float("nan")
         else:
@@ -219,6 +229,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/base_config.yaml")
+    parser.add_argument("--adapter_path", default="./lora_adapters", help="Path to local LoRA adapters directory")
     args = parser.parse_args()
 
-    HelpfulnessEvaluator(args.config).run()
+    HelpfulnessEvaluator(args.config, adapter_path=args.adapter_path).run()

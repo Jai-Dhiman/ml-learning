@@ -14,6 +14,14 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from trl import DataCollatorForCompletionOnlyLM
 
+import transformers
+# Fail fast if an incompatible transformers major version is installed
+if transformers.__version__.split('.')[0] != '4':
+    raise RuntimeError(
+        f"This training script requires transformers 4.x; found {transformers.__version__}. "
+        f"Use 'uv sync' in Colab to install pinned versions from pyproject.toml."
+    )
+
 from datasets import load_dataset, get_dataset_config_names, get_dataset_split_names
 from typing import Dict, Any
 

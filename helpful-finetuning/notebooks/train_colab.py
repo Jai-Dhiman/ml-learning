@@ -1,12 +1,7 @@
 # Colab: install deps and run training (enter tokens via widgets)
 
-# Cell 1: Install deps
-!pip -q install -U bitsandbytes==0.41.3 accelerate datasets wandb evaluate pyyaml tqdm
-!pip -q install -U trl==0.9.4
-!pip -q install -U git+https://github.com/huggingface/transformers.git
-!pip -q install -U git+https://github.com/huggingface/peft.git
-# Stage 1 safety classifier (JAX/Flax) for filtering/eval
-!pip -q install "jax[cpu]>=0.4.28,<0.5.0" "flax>=0.8.4,<0.9.0" "optax>=0.2.2,<0.3.0"
+# Cell 1: Install uv (we will use repo-pinned dependencies)
+!pip -q install -U uv
 
 # Cell 2: Clone repo (if needed) and cd
 import os, glob
@@ -14,6 +9,9 @@ from pathlib import Path
 if not os.path.exists('/content/ml-learning'):
     !git clone https://github.com/Jai-Dhiman/ml-learning.git /content/ml-learning
 %cd /content/ml-learning/helpful-finetuning
+# Create and sync a project-local environment pinned to repo deps
+!uv venv
+!bash -lc 'source .venv/bin/activate && uv sync'
 
 # Optional: Mount Google Drive for checkpoints/artifacts
 from google.colab import drive
@@ -58,7 +56,7 @@ if torch.cuda.is_available():
     print(torch.cuda.get_device_name(0))
 
 # Cell 5: Run training with colab overrides
-!python -m src.training.train_qlora --config configs/base_config.yaml --override configs/colab_config.yaml
+!bash -lc 'source .venv/bin/activate && uv run --with bitsandbytes==0.43.1 python -m src.training.train_qlora --config configs/base_config.yaml --override configs/colab_config.yaml'
 
 # Cell 6: Evaluate a subset
-!python -m src.evaluation.evaluate_helpfulness --config configs/base_config.yaml
+!bash -lc 'source .venv/bin/activate && uv run --with bitsandbytes==0.43.1 python -m src.evaluation.evaluate_helpfulness --config configs/base_config.yaml'
