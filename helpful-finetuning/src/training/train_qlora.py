@@ -1,21 +1,83 @@
 import os
 import yaml
 import torch
+import random
+import numpy as np
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
-    DataCollatorForLanguageModeling,
+    set_seed,
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from trl import DataCollatorForCompletionOnlyLM
 
-from datasets import load_dataset
+from datasets import load_dataset, get_dataset_config_names, get_dataset_split_names
 from typing import Dict, Any
 
 from src.utils.data_utils import HHDatasetProcessor
 from src.utils.safety_integration import SafetyFilter
+
+
+class ConfigError(ValueError):
+    pass
+
+
+def _base_split_name(split: str) -> str:
+    if not split:
+        return split
+    base = split.split("[")[0]
+    base = base.split(":")[0]
+    return base.strip()
+
+
+def preflight_validate_dataset(dcfg: Dict[str, Any]) -> None:
+    name = dcfg.get('name')
+    subset = dcfg.get('subset')
+    train_split = dcfg.get('train_split')
+    eval_split = dcfg.get('eval_split')
+
+    if not name:
+        raise ConfigError("dataset.name is required and must be 'Anthropic/hh-rlhf' for Stage 2.")
+    if name != "Anthropic/hh-rlhf":
+        raise ConfigError(f"Stage 2 is restricted to dataset 'Anthropic/hh-rlhf'. Received: {name}.")
+    if not subset:
+        raise ConfigError(
+            "dataset.subset is required for Stage 2. Examples: "
+            "helpful-base, helpful-rejection-sampled, harmless-base, harmless-rejection-sampled."
+        )
+
+    try:
+        configs = get_dataset_config_names(name)
+    except Exception as e:
+        raise RuntimeError(
+            f"Unable to query available configs for {name}. Check internet connectivity or HF hub status.\n"
+            f"Original error: {e}"
+        ) from e
+    if subset not in configs:
+        raise ConfigError(
+            f"Invalid subset '{subset}' for {name}. Available: {', '.join(configs)}.\n"
+            f"Fix your config or list configs with:\n"
+            f"  uv run python -c \"from datasets import get_dataset_config_names; print(get_dataset_config_names('{name}'))\""
+        )
+
+    for label, s in (('train_split', train_split), ('eval_split', eval_split)):
+        if not s:
+            # Not strictly required to provide eval_split; only validate if provided
+            continue
+        base = _base_split_name(s)
+        try:
+            splits = get_dataset_split_names(name, subset)
+        except Exception as e:
+            raise RuntimeError(
+                f"Unable to query splits for {name}/{subset}. Original error: {e}"
+            ) from e
+        if base not in splits:
+            raise ConfigError(
+                f"Invalid {label} '{s}' for {name}/{subset}. Available: {', '.join(splits)}."
+            )
 
 
 def load_config(path: str) -> Dict[str, Any]:
@@ -70,6 +132,19 @@ class GemmaQLoRATrainer:
         # Prepare for k-bit training
         model = prepare_model_for_kbit_training(model)
 
+        # Enable gradient checkpointing and disable cache if configured
+        tcfg = self.cfg['training']
+        if tcfg.get('gradient_checkpointing', False):
+            try:
+                model.gradient_checkpointing_enable()
+            except Exception:
+                pass
+        try:
+            if hasattr(model, 'config'):
+                model.config.use_cache = False
+        except Exception:
+            pass
+
         # PEFT - LoRA
         lcfg = self.cfg['lora']
         lora = LoraConfig(
@@ -106,11 +181,29 @@ class GemmaQLoRATrainer:
         return train_tok, eval_tok
 
     def train(self):
+        # Set seeds for reproducibility
+        seed = int(os.environ.get("STAGE2_SEED", "42"))
+        try:
+            set_seed(seed)
+        except Exception:
+            pass
+        random.seed(seed)
+        np.random.seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.manual_seed(seed)
+
+        # Fail fast: validate dataset configuration before heavy model loading or W&B
+        preflight_validate_dataset(self.cfg['dataset'])
+
         # W&B (delay import to allow offline use if desired)
         import wandb
         wcfg = self.cfg['wandb']
-        wandb.login()
-        wandb.init(project=wcfg['project'], entity=wcfg['entity'], tags=wcfg.get('tags', []), config=self.cfg)
+        try:
+            wandb.login()
+            wandb.init(project=wcfg['project'], entity=wcfg['entity'], tags=wcfg.get('tags', []), config=self.cfg)
+        except Exception:
+            print("[W&B] Login/init failed; continuing without W&B")
 
         # Setup model
         model, tokenizer = self.setup_model_and_tokenizer()
@@ -150,7 +243,12 @@ class GemmaQLoRATrainer:
             run_name="gemma-7b-helpful-qlora",
         )
 
-        collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+        # Collator that masks non-assistant tokens using the response template marker
+        response_template = "<start_of_turn>model\n"
+        collator = DataCollatorForCompletionOnlyLM(
+            response_template=response_template,
+            tokenizer=tokenizer,
+        )
 
         trainer = Trainer(
             model=model,
@@ -167,7 +265,10 @@ class GemmaQLoRATrainer:
         except Exception:
             pass
 
-        wandb.finish()
+        try:
+            wandb.finish()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 # Cell 1: Install deps
 !pip -q install -U bitsandbytes==0.41.3 accelerate datasets wandb evaluate pyyaml tqdm
+!pip -q install -U trl==0.9.4
 !pip -q install -U git+https://github.com/huggingface/transformers.git
 !pip -q install -U git+https://github.com/huggingface/peft.git
 # Stage 1 safety classifier (JAX/Flax) for filtering/eval
@@ -11,7 +12,7 @@
 import os, glob
 from pathlib import Path
 if not os.path.exists('/content/ml-learning'):
-    !git clone https://github.com/yourusername/ml-learning.git /content/ml-learning
+    !git clone https://github.com/Jai-Dhiman/ml-learning.git /content/ml-learning
 %cd /content/ml-learning/helpful-finetuning
 
 # Optional: Mount Google Drive for checkpoints/artifacts
@@ -23,9 +24,21 @@ except Exception as e:
     print('Drive not mounted. Proceeding without it.')
 
 # If a Stage 1 zip exists in Drive, extract to expected path
-zip_candidates = glob.glob('/content/drive/MyDrive/safety_text_classifier_trained_*.zip')
+exact_zip = '/content/drive/MyDrive/safety-text-classifier/safety_text_classifier_trained_20250916_0632.zip'
+zip_candidates = []
+if os.path.exists(exact_zip):
+    zip_candidates = [exact_zip]
+else:
+    patterns = [
+        '/content/drive/MyDrive/safety_text_classifier_trained_*.zip',
+        '/content/drive/MyDrive/safety-text-classifier/safety_text_classifier_trained_*.zip',
+    ]
+    for p in patterns:
+        zip_candidates.extend(glob.glob(p))
+
 if zip_candidates:
     os.makedirs('/content/ml-learning/safety-text-classifier', exist_ok=True)
+    zip_candidates.sort(reverse=True)
     print('Found Stage 1 package:', zip_candidates[0])
     !unzip -o "{zip_candidates[0]}" -d /content/ml-learning/safety-text-classifier
 else:

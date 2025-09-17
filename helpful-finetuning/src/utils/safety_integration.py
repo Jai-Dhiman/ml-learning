@@ -44,13 +44,37 @@ class SafetyFilter:
 
             self.model = create_model(cfg)
 
-            # Restore params
-            restored = checkpoints.restore_checkpoint(self.checkpoint_dir, target=None)
-            params = restored.params if hasattr(restored, 'params') else restored
-            if params is None:
-                print("[SafetyFilter] No checkpoint found; safety filter disabled.")
+            # Resolve checkpoint directory robustly
+            ckpt_dir = self.checkpoint_dir
+            candidates = [ckpt_dir]
+            # Common alternates
+            if ckpt_dir.endswith('best_model'):
+                candidates.append(ckpt_dir.rsplit('best_model', 1)[0] + 'best')
+            else:
+                candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints', 'best_model'))
+                candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints', 'best'))
+            # Walk for any directory that contains Flax checkpoint files
+            for root, dirs, files in os.walk(STAGE1_ROOT):
+                if 'checkpoint' in ''.join(files) or any(fn.startswith('checkpoint_') for fn in files):
+                    candidates.append(root)
+
+            found = None
+            for c in candidates:
+                if os.path.isdir(c):
+                    try:
+                        restored = checkpoints.restore_checkpoint(c, target=None)
+                        params = restored.params if hasattr(restored, 'params') else restored
+                        if params is not None:
+                            found = c
+                            self.params = params
+                            break
+                    except Exception:
+                        continue
+            if found is None:
+                print(f"[SafetyFilter] No checkpoint found under {self.checkpoint_dir} or alternates; safety filter disabled.")
                 return
-            self.params = params
+            else:
+                print(f"[SafetyFilter] Loaded checkpoint from: {found}")
 
             # Tokenizer per Stage 1 data config
             from transformers import AutoTokenizer

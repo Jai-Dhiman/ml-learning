@@ -46,3 +46,10 @@ class GemmaInference:
         if "<start_of_turn>model" in text:
             text = text.split("<start_of_turn>model")[-1].strip()
         return text
+
+    # Expose underlying model/tokenizer if needed for evaluation
+    def get_model(self):
+        return self.model
+
+    def get_tokenizer(self):
+        return self.tokenizer

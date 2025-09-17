@@ -4,6 +4,10 @@ training:
   gradient_accumulation_steps: 8
   max_seq_length: 256
 
+# Explicit dataset subset required (no fallbacks)
+dataset:
+  subset: default
+
 optimization:
   use_gradient_checkpointing: true
   clear_cache_steps: 50
