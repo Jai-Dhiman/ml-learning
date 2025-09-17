@@ -1,3 +1,4 @@
+import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
@@ -24,7 +25,21 @@ class GemmaInference:
         )
 
         if adapter_path:
-            self.model = PeftModel.from_pretrained(self.model, adapter_path)
+            # Prefer loading from a local adapter directory and validate structure
+            if os.path.isdir(adapter_path):
+                cfg_path = os.path.join(adapter_path, "adapter_config.json")
+                if not os.path.exists(cfg_path):
+                    raise FileNotFoundError(
+                        f"Expected '{cfg_path}' but it was not found. The LoRA adapters do not appear to be saved.\n"
+                        f"- Ensure training completed and saved adapters.\n"
+                        f"- After training, you should see: [Stage2] Saved LoRA adapters to ./lora_adapters\n"
+                        f"- If not present, re-run training and check for errors during save_pretrained."
+                    )
+                self.model = PeftModel.from_pretrained(self.model, adapter_path)
+            else:
+                # If not a directory, attempt to treat as a remote model id
+                # (No silent fallback: invalid ids will raise clearly.)
+                self.model = PeftModel.from_pretrained(self.model, adapter_path)
 
         self.tokenizer = AutoTokenizer.from_pretrained(base_model_name, trust_remote_code=True)
         if self.tokenizer.pad_token is None:

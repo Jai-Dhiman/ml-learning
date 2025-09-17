@@ -260,10 +260,11 @@ class GemmaQLoRATrainer:
 
         trainer.train()
         trainer.save_model("./final_model")
-        try:
-            model.save_pretrained("./lora_adapters")
-        except Exception:
-            pass
+
+        # Save LoRA adapters explicitly; do not suppress errors (fail fast)
+        os.makedirs("./lora_adapters", exist_ok=True)
+        model.save_pretrained("./lora_adapters")
+        print("[Stage2] Saved LoRA adapters to ./lora_adapters")
 
         try:
             wandb.finish()
