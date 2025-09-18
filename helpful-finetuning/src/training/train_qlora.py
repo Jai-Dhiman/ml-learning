@@ -65,11 +65,42 @@ def preflight_validate_dataset(dcfg: Dict[str, Any]) -> None:
             f"Original error: {e}"
         ) from e
     if subset not in configs:
-        raise ConfigError(
-            f"Invalid subset '{subset}' for {name}. Available: {', '.join(configs)}.\n"
-            f"Fix your config or list configs with:\n"
-            f"  uv run python -c \"from datasets import get_dataset_config_names; print(get_dataset_config_names('{name}'))\""
-        )
+        # Some environments incorrectly report only ['default'] for HH. Perform robust checks.
+        alt_configs = []
+        try:
+            from huggingface_hub import hf_hub_download
+            import json as _json
+            try:
+                info_path = hf_hub_download(repo_id=name, filename="dataset_infos.json", repo_type="dataset")
+                with open(info_path, "r") as _f:
+                    info = _json.load(_f)
+                    if isinstance(info, dict):
+                        alt_configs = list(info.keys())
+            except Exception:
+                alt_configs = []
+        except Exception:
+            alt_configs = []
+
+        # As a final authoritative check, attempt to load a tiny slice of the requested subset
+        tiny_ok = False
+        tiny_err = None
+        try:
+            _ = load_dataset(name, subset, split="test[:1]")
+            tiny_ok = True
+        except Exception as te:
+            tiny_err = te
+
+        if not tiny_ok:
+            hint_list = alt_configs or configs
+            raise ConfigError(
+                (
+                    f"Invalid subset '{subset}' for {name}. "
+                    f"Available (reported): {', '.join(configs)}."
+                    + (f" Alternative configs from dataset_infos.json: {', '.join(alt_configs)}." if alt_configs else "")
+                    + (f" Attempted tiny load failed: {tiny_err}" if tiny_err else "")
+                    + "\nIf you are authenticated but still see only ['default'], try upgrading datasets and huggingface_hub."
+                )
+            )
 
     for label, s in (('train_split', train_split), ('eval_split', eval_split)):
         if not s:
