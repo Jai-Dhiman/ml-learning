@@ -33,7 +33,7 @@ training:
 # Dataset configuration
 dataset:
   name: "Anthropic/hh-rlhf"
-  subset: "helpful-base"
+  subset: "helpful-rejection-sampled"
   train_split: "train[:10000]"
   eval_split: "test[:1000]"
 

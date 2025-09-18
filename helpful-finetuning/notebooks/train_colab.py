@@ -14,9 +14,15 @@ if not os.path.exists('/content/ml-learning'):
 !bash -lc 'source .venv/bin/activate && uv sync'
 
 # Ensure bitsandbytes with CUDA support and required Triton are available in this env
-!bash -lc 'source .venv/bin/activate && pip uninstall -y bitsandbytes || true'
-!bash -lc 'source .venv/bin/activate && pip install -U triton==2.2.0'
-!bash -lc 'source .venv/bin/activate && pip install --pre -U --extra-index-url https://jllllll.github.io/bitsandbytes-wheels/cu126/ bitsandbytes==0.43.1'
+!bash -lc 'source .venv/bin/activate && uv pip uninstall -y bitsandbytes || true'
+!bash -lc 'source .venv/bin/activate && python - <<\'PY\'
+import torch, re, os
+v = torch.version.cuda or ""
+digits = re.sub(r"\D", "", v) or "121"
+print("Detected CUDA version:", v, "-> BNB_CUDA_VERSION:", digits)
+open("/tmp/bnb_cuda_version", "w").write(digits)
+PY'
+!bash -lc 'export BNB_CUDA_VERSION=$(cat /tmp/bnb_cuda_version); source .venv/bin/activate && uv pip install -U triton==2.2.0 && uv pip install --pre -U --extra-index-url https://jllllll.github.io/bitsandbytes-wheels/cu${BNB_CUDA_VERSION}/ bitsandbytes==0.43.1'
 
 # Optional: Mount Google Drive for checkpoints/artifacts
 from google.colab import drive
@@ -61,7 +67,7 @@ if torch.cuda.is_available():
     print(torch.cuda.get_device_name(0))
 
 # Cell 5: Run training with colab overrides
-!bash -lc 'source .venv/bin/activate && export BNB_CUDA_VERSION=126 && uv run --with "jax[cpu]==0.4.38" --with "flax>=0.8.4,<0.9.0" --with "optax>=0.2.2,<0.3.0" --with triton==2.2.0 --with bitsandbytes==0.43.1 python -m src.training.train_qlora --config configs/base_config.yaml --override configs/colab_config.yaml'
+!bash -lc 'source .venv/bin/activate && uv run --with "jax[cpu]==0.4.38" --with "flax>=0.8.4,<0.9.0" --with "optax>=0.2.2,<0.3.0" python -m src.training.train_qlora --config configs/base_config.yaml --override configs/colab_config.yaml'
 
 # Cell 6: Evaluate a subset
-!bash -lc 'source .venv/bin/activate && export BNB_CUDA_VERSION=126 && uv run --with "jax[cpu]==0.4.38" --with "flax>=0.8.4,<0.9.0" --with "optax>=0.2.2,<0.3.0" --with triton==2.2.0 --with bitsandbytes==0.43.1 python -m src.evaluation.evaluate_helpfulness --config configs/base_config.yaml'
+!bash -lc 'source .venv/bin/activate && uv run --with "jax[cpu]==0.4.38" --with "flax>=0.8.4,<0.9.0" --with "optax>=0.2.2,<0.3.0" python -m src.evaluation.evaluate_helpfulness --config configs/base_config.yaml'
