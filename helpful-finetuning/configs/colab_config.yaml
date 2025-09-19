@@ -1,8 +1,12 @@
 # Colab Pro optimized settings
+# For environments without bitsandbytes GPU wheels, use smaller settings.
+model:
+  load_in_4bit: false
+
 training:
-  batch_size: 2
-  gradient_accumulation_steps: 8
-  max_seq_length: 256
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  max_seq_length: 128
 
 optimization:
   use_gradient_checkpointing: true

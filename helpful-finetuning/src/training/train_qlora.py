@@ -148,28 +148,54 @@ class GemmaQLoRATrainer:
     def setup_model_and_tokenizer(self):
         mcfg = self.cfg['model']
 
-        # Quantization config
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=mcfg['load_in_4bit'],
-            bnb_4bit_compute_dtype=getattr(torch, mcfg['bnb_4bit_compute_dtype']),
-            bnb_4bit_quant_type=mcfg['bnb_4bit_quant_type'],
-            bnb_4bit_use_double_quant=mcfg['bnb_4bit_use_double_quant'],
-        )
+        # Build quantization config conditionally (avoid bitsandbytes if unavailable)
+        bnb_config = None
+        if bool(mcfg.get('load_in_4bit', False)):
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=getattr(torch, mcfg['bnb_4bit_compute_dtype']),
+                bnb_4bit_quant_type=mcfg['bnb_4bit_quant_type'],
+                bnb_4bit_use_double_quant=mcfg['bnb_4bit_use_double_quant'],
+            )
 
         # Load base model
-        model = AutoModelForCausalLM.from_pretrained(
-            mcfg['name'],
-            quantization_config=bnb_config,
-            device_map="auto",
-            trust_remote_code=True,
-        )
+        try:
+            if bnb_config is not None:
+                model = AutoModelForCausalLM.from_pretrained(
+                    mcfg['name'],
+                    quantization_config=bnb_config,
+                    device_map="auto",
+                    trust_remote_code=True,
+                )
+            else:
+                model = AutoModelForCausalLM.from_pretrained(
+                    mcfg['name'],
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                )
+        except Exception as e:
+            if bnb_config is not None:
+                print("[Stage2] 4-bit load failed; falling back to float16 without bitsandbytes. Error:", e)
+                model = AutoModelForCausalLM.from_pretrained(
+                    mcfg['name'],
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                )
+            else:
+                raise
 
         tokenizer = AutoTokenizer.from_pretrained(mcfg['name'], trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        # Prepare for k-bit training
-        model = prepare_model_for_kbit_training(model)
+        # Prepare for training
+        if bnb_config is not None:
+            # Only for k-bit training
+            model = prepare_model_for_kbit_training(model)
 
         # Enable gradient checkpointing and disable cache if configured
         tcfg = self.cfg['training']

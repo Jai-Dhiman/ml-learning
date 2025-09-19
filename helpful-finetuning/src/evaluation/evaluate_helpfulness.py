@@ -120,8 +120,8 @@ class HelpfulnessEvaluator:
         random.seed(seed)
         np.random.seed(seed)
 
-        # Load models (4-bit for both)
-        base = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=None, load_in_4bit=True)
+        # Load models (fallback to non-4bit if bnb unavailable)
+        base = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=None, load_in_4bit=False)
 
         # Fail fast: ensure adapters exist locally before attempting to load
         adapter_dir = self.adapter_path
@@ -130,7 +130,7 @@ class HelpfulnessEvaluator:
                 f"LoRA adapters not found at '{adapter_dir}'. "
                 f"Please run training first or pass a valid --adapter_path pointing to a directory containing adapter_config.json."
             )
-        finetuned = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=adapter_dir, load_in_4bit=True)
+        finetuned = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=adapter_dir, load_in_4bit=False)
 
         safety = SafetyFilter(
             classifier_config_path=self.cfg['safety']['classifier_config_path'],

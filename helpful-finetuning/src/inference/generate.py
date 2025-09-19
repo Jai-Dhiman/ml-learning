@@ -17,12 +17,31 @@ class GemmaInference:
                 bnb_4bit_use_double_quant=True,
             )
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            base_model_name,
-            quantization_config=bnb_config,
-            device_map="auto",
-            trust_remote_code=True,
-        )
+        try:
+            if bnb_config is not None:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    base_model_name,
+                    quantization_config=bnb_config,
+                    device_map="auto",
+                    trust_remote_code=True,
+                )
+            else:
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    base_model_name,
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                )
+        except Exception as e:
+            # Fallback if bitsandbytes path fails
+            self.model = AutoModelForCausalLM.from_pretrained(
+                base_model_name,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                low_cpu_mem_usage=True,
+                trust_remote_code=True,
+            )
 
         if adapter_path:
             # Prefer loading from a local adapter directory and validate structure
