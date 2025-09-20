@@ -180,9 +180,12 @@ class SafetyFilter:
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
 
-            # Warm JIT
-            dummy = jnp.ones((1, cfg['data']['max_length']), dtype=jnp.int32)
-            _ = self.model.apply(self.params, dummy, training=False)
+            # Optional warm check (non-fatal). Some environments have tracing issues; skip on error.
+            try:
+                dummy = jnp.ones((1, cfg['data']['max_length']), dtype=jnp.int32)
+                _ = self.model.apply(self.params, dummy, training=False)
+            except Exception as warm_err:
+                print(f"[SafetyFilter] Skipping warm apply due to: {warm_err}")
 
             self.ready = True
             print("[SafetyFilter] Loaded Stage 1 safety classifier successfully.")
@@ -208,7 +211,15 @@ class SafetyFilter:
             if jnp is None or jax is None:
                 raise RuntimeError("Internal JAX refs missing; SafetyFilter initialization did not complete.")
             input_ids = jnp.array(enc['input_ids'])
-            outputs = self.model.apply(self.params, input_ids, training=False)
+            try:
+                outputs = self.model.apply(self.params, input_ids, training=False)
+            except Exception as e1:
+                # Fallback: disable JIT and retry to avoid tracer issues
+                try:
+                    with jax.disable_jit():
+                        outputs = self.model.apply(self.params, input_ids, training=False)
+                except Exception as e2:
+                    raise
             logits = outputs['logits'][0]
             probs = jax.nn.sigmoid(logits)
             max_risk = float(jnp.max(probs))
