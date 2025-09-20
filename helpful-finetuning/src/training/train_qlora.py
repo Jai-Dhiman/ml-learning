@@ -245,7 +245,25 @@ class GemmaQLoRATrainer:
         )
         return train_tok, eval_tok
 
-    def train(self):
+    def train(self, cli_args=None):
+        # Parse runtime flags
+        disable_wandb = False
+        preflight_only = False
+        safety_ckpt_override = None
+        if cli_args is not None:
+            disable_wandb = bool(getattr(cli_args, 'disable_wandb', False))
+            preflight_only = bool(getattr(cli_args, 'preflight_only', False))
+            safety_ckpt_override = getattr(cli_args, 'safety_ckpt_path', None)
+        # Also respect environment variable for W&B
+        if os.environ.get('WANDB_DISABLED', '').lower() in ('1', 'true', 'yes'):
+            disable_wandb = True
+
+        # Ensure W&B is disabled early if requested
+        if disable_wandb:
+            os.environ['WANDB_DISABLED'] = 'true'
+            os.environ['WANDB_MODE'] = 'disabled'
+            os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
+
         # Set seeds for reproducibility
         seed = int(os.environ.get("STAGE2_SEED", "42"))
         try:
@@ -261,25 +279,62 @@ class GemmaQLoRATrainer:
         # Fail fast: validate dataset configuration before heavy model loading or W&B
         preflight_validate_dataset(self.cfg['dataset'])
 
-        # W&B (delay import to allow offline use if desired)
-        import wandb
-        wcfg = self.cfg['wandb']
-        try:
-            wandb.login()
-            wandb.init(project=wcfg['project'], entity=wcfg['entity'], tags=wcfg.get('tags', []), config=self.cfg)
-        except Exception:
-            print("[W&B] Login/init failed; continuing without W&B")
+        # Resolve safety checkpoint path (optional overrides)
+        scfg = self.cfg.get('safety', {})
+        safety_filter = None
+        resolved_ckpt = None
+        if scfg.get('enabled', False):
+            resolved_ckpt = (
+                safety_ckpt_override
+                or os.environ.get('STAGE1_CKPT_PATH')
+                or scfg.get('checkpoint_dir')
+            )
+            # Defer SafetyFilter creation until after potential preflight decision
+
+        # Preflight path: test SafetyFilter on CPU and exit without model downloads
+        if preflight_only:
+            print("[Preflight] Running dataset and safety preflight (no Gemma downloads)...")
+            try:
+                if scfg.get('enabled', False):
+                    sf = SafetyFilter(
+                        classifier_config_path=scfg['classifier_config_path'],
+                        checkpoint_dir=resolved_ckpt,
+                    )
+                    print("[Preflight] SafetyFilter ready:", sf.ready)
+                    try:
+                        score = sf.score_text("I love reading books.")
+                        print(f"[Preflight] Sample safety score: {score:.3f}")
+                    except Exception as se:
+                        print("[Preflight] Safety scoring failed:", se)
+                else:
+                    print("[Preflight] Safety disabled by config; skipping safety preflight")
+                print("[Preflight] OK. Exiting preflight.")
+                return
+            except Exception as e:
+                # Explicit failure per user preference
+                raise
+
+        # W&B (delay import; skip entirely if disabled)
+        if not disable_wandb:
+            try:
+                import wandb  # type: ignore
+                wcfg = self.cfg['wandb']
+                try:
+                    wandb.login()
+                    wandb.init(project=wcfg['project'], entity=wcfg['entity'], tags=wcfg.get('tags', []), config=self.cfg)
+                except Exception:
+                    print("[W&B] Login/init failed; continuing without W&B")
+            except Exception:
+                print("[W&B] Disabled or not available; proceeding without W&B")
 
         # Setup model
         model, tokenizer = self.setup_model_and_tokenizer()
 
         # Safety classifier (optional)
-        scfg = self.cfg.get('safety', {})
-        safety_filter = None
         if scfg.get('enabled', False):
             safety_filter = SafetyFilter(
                 classifier_config_path=scfg['classifier_config_path'],
-                checkpoint_dir=scfg['checkpoint_dir'],
+                checkpoint_dir=resolved_ckpt,
             )
 
         # Data
@@ -287,6 +342,8 @@ class GemmaQLoRATrainer:
 
         # Training args
         tcfg = self.cfg['training']
+        # Configure reporting target (disable W&B if requested)
+        report_target = "none" if (os.environ.get('WANDB_DISABLED', '').lower() in ('1','true','yes')) else ["wandb"]
         args = TrainingArguments(
             output_dir="./outputs",
             per_device_train_batch_size=tcfg['batch_size'],
@@ -304,7 +361,7 @@ class GemmaQLoRATrainer:
             fp16=tcfg['fp16'],
             gradient_checkpointing=tcfg['gradient_checkpointing'],
             optim=tcfg['optim'],
-            report_to=["wandb"],
+            report_to=report_target,
             run_name="gemma-7b-helpful-qlora",
         )
 
@@ -332,6 +389,7 @@ class GemmaQLoRATrainer:
         print("[Stage2] Saved LoRA adapters to ./lora_adapters")
 
         try:
+            import wandb  # type: ignore
             wandb.finish()
         except Exception:
             pass
@@ -343,7 +401,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/base_config.yaml")
     parser.add_argument("--override", default=None)
+    parser.add_argument("--disable-wandb", dest="disable_wandb", action="store_true", help="Disable Weights & Biases logging")
+    parser.add_argument("--preflight-only", dest="preflight_only", action="store_true", help="Run dataset/safety preflight and exit without training")
+    parser.add_argument("--preflight-samples", dest="preflight_samples", type=int, default=16, help="Number of samples for preflight checks (reserved)")
+    parser.add_argument("--safety-ckpt-path", dest="safety_ckpt_path", default=None, help="Explicit path to Stage 1 checkpoint directory")
     args = parser.parse_args()
 
     trainer = GemmaQLoRATrainer(args.config, args.override)
-    trainer.train()
+    trainer.train(cli_args=args)

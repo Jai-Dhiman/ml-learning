@@ -34,6 +34,8 @@ class SafetyFilter:
         try:
             # Import JAX/Flax lazily and fail explicitly if unavailable
             try:
+                # Prefer CPU JAX to minimize Colab GPU resource usage for safety scoring
+                os.environ.setdefault("JAX_PLATFORM_NAME", "cpu")
                 import jax  # type: ignore
                 import jax.numpy as jnp  # type: ignore
                 from flax.training import checkpoints  # type: ignore
@@ -58,20 +60,50 @@ class SafetyFilter:
 
             # Resolve checkpoint directory robustly
             ckpt_dir = self.checkpoint_dir
-            candidates = [ckpt_dir]
-            # Common alternates
-            if ckpt_dir.endswith('best_model'):
-                candidates.append(ckpt_dir.rsplit('best_model', 1)[0] + 'best')
-            else:
-                candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints', 'best_model'))
-                candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints', 'best'))
-            # Walk for any directory that contains Flax checkpoint files
-            for root, dirs, files in os.walk(STAGE1_ROOT):
-                if 'checkpoint' in ''.join(files) or any(fn.startswith('checkpoint_') for fn in files):
-                    candidates.append(root)
+            candidates = []
 
+            # Direct inputs
+            if ckpt_dir:
+                candidates.append(ckpt_dir)
+                candidates.append(os.path.join(ckpt_dir, 'checkpoints'))
+                candidates.append(os.path.join(ckpt_dir, 'best'))
+                candidates.append(os.path.join(ckpt_dir, 'best_model'))
+                candidates.append(os.path.join(ckpt_dir, 'final'))
+
+            # Environment override
+            env_ckpt = os.environ.get('STAGE1_CKPT_PATH')
+            if env_ckpt:
+                candidates.append(env_ckpt)
+
+            # Common alternates under repo root
+            candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints'))
+            candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints', 'best'))
+            candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints', 'best_model'))
+            candidates.append(os.path.join(STAGE1_ROOT, 'checkpoints', 'final'))
+
+            # Walk for any directory that contains Flax checkpoint files under likely roots
+            def append_walk(root_dir: str):
+                if not os.path.isdir(root_dir):
+                    return
+                for root, dirs, files in os.walk(root_dir):
+                    names = set(files) | set(dirs)
+                    if (
+                        any(fn.startswith('checkpoint') for fn in names)
+                        or any(fn.endswith('.msgpack') for fn in names)
+                        or {'best', 'best_model', 'final'}.intersection(names)
+                    ):
+                        candidates.append(root)
+
+            append_walk(STAGE1_ROOT)
+            if ckpt_dir:
+                append_walk(ckpt_dir)
+
+            tried = []
             found = None
             for c in candidates:
+                if c in tried:
+                    continue
+                tried.append(c)
                 if os.path.isdir(c):
                     try:
                         restored = checkpoints.restore_checkpoint(c, target=None)
@@ -84,7 +116,7 @@ class SafetyFilter:
                         continue
             if found is None:
                 raise RuntimeError(
-                    f"No Stage 1 checkpoint found under '{self.checkpoint_dir}' or common alternates."
+                    "No Stage 1 checkpoint found. Tried paths: " + ", ".join(tried)
                 )
             else:
                 print(f"[SafetyFilter] Loaded checkpoint from: {found}")
