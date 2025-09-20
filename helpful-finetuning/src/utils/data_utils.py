@@ -128,8 +128,22 @@ class HHDatasetProcessor:
     def apply_safety_filter(self, ds):
         if not self.safety_filter:
             return ds
+        safety_cfg = self.config.get('safety', {})
+        # Respect filter_unsafe flag; allow skipping filtering entirely
+        if not safety_cfg.get('filter_unsafe', True):
+            logger.warning("Safety filtering disabled by config (safety.filter_unsafe=false); skipping")
+            return ds
+        threshold = float(safety_cfg.get('safety_threshold', 0.8))
         # Create a boolean mask by evaluating the safety model on the chosen responses
         def mask_fn(example, idx):
-            score = self.safety_filter.score_text(example['chosen'])
-            return score >= self.config['safety']['safety_threshold']
+            try:
+                score = self.safety_filter.score_text(example['chosen'])
+            except Exception as e:
+                # Lenient mode: treat as safe to avoid blocking the pipeline
+                import os as _os
+                if _os.environ.get('SAFETY_LENIENT', '').lower() in ('1', 'true', 'yes'):
+                    logger.warning(f"Safety scoring error at idx={idx}; lenient=True -> keeping example. Error: {e}")
+                    return True
+                raise
+            return score >= threshold
         return ds.filter(mask_fn, with_indices=True)

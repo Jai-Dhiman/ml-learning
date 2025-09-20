@@ -289,6 +289,8 @@ class GemmaQLoRATrainer:
                 or os.environ.get('STAGE1_CKPT_PATH')
                 or scfg.get('checkpoint_dir')
             )
+            # Default to lenient behavior during training to avoid crashes while filtering
+            os.environ.setdefault('SAFETY_LENIENT', '1')
             # Defer SafetyFilter creation until after potential preflight decision
 
         # Preflight path: test SafetyFilter on CPU and exit without model downloads

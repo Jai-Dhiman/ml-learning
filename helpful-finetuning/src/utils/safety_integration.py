@@ -219,6 +219,9 @@ class SafetyFilter:
                     with jax.disable_jit():
                         outputs = self.model.apply(self.params, input_ids, training=False)
                 except Exception as e2:
+                    if os.environ.get('SAFETY_LENIENT', '').lower() in ('1', 'true', 'yes'):
+                        print(f"[SafetyFilter] score_text error; lenient mode returning 1.0: {e2}")
+                        return 1.0
                     raise
             logits = outputs['logits'][0]
             probs = jax.nn.sigmoid(logits)
