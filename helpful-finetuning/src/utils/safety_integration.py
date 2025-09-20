@@ -1,6 +1,7 @@
 import os
 import sys
 import yaml
+import pickle
 from typing import Optional
 
 # Make Stage 1 package importable
@@ -115,10 +116,61 @@ class SafetyFilter:
                     except Exception:
                         continue
             if found is None:
-                raise RuntimeError(
-                    "No Stage 1 checkpoint found. Tried paths: " + ", ".join(tried)
-                )
-            else:
+                # Fallback: try legacy pickle backups (best_backup/model_step_*.pkl)
+                pkl_candidates = []
+                search_roots = [
+                    self.checkpoint_dir,
+                    STAGE1_ROOT,
+                    os.path.join(STAGE1_ROOT, 'checkpoints'),
+                ]
+                for root in search_roots:
+                    if not root:
+                        continue
+                    bb = os.path.join(root, 'best_backup') if not root.endswith('best_backup') else root
+                    if os.path.isdir(bb):
+                        for name in os.listdir(bb):
+                            if name.endswith('.pkl') and name.startswith('model_step_'):
+                                pkl_candidates.append(os.path.join(bb, name))
+                if pkl_candidates:
+                    # Pick the highest step by filename numeric sort
+                    def _step_num(p):
+                        try:
+                            base = os.path.basename(p)
+                            num = base.replace('model_step_', '').replace('.pkl', '')
+                            return int(num)
+                        except Exception:
+                            return -1
+                    pkl_candidates.sort(key=_step_num, reverse=True)
+                    pkl_path = pkl_candidates[0]
+                    try:
+                        with open(pkl_path, 'rb') as f:
+                            obj = pickle.load(f)
+                        # Accept common structures: TrainState-like, dict with params, or raw params
+                        params = None
+                        if hasattr(obj, 'params'):
+                            params = obj.params
+                        elif isinstance(obj, dict) and 'params' in obj:
+                            params = obj['params']
+                        else:
+                            # Assume obj itself is a params pytree
+                            params = obj
+                        if params is None:
+                            raise RuntimeError(f"Pickle did not contain params: {type(obj)}")
+                        self.params = params
+                        found = os.path.dirname(pkl_path)
+                        print(f"[SafetyFilter] Loaded params from pickle backup: {pkl_path}")
+                    except Exception as pe:
+                        raise RuntimeError(
+                            "No Stage 1 checkpoint found and pickle fallback failed.\n"
+                            + "Tried directories: " + ", ".join(tried) + "\n"
+                            + f"Pickle candidate tried: {pkl_path} -> error: {pe}"
+                        )
+                else:
+                    raise RuntimeError(
+                        "No Stage 1 checkpoint found. Tried paths: " + ", ".join(tried)
+                    )
+            
+            if found is not None:
                 print(f"[SafetyFilter] Loaded checkpoint from: {found}")
 
             # Tokenizer per Stage 1 data config
