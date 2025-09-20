@@ -29,6 +29,7 @@ class SafetyFilter:
         self.params = None
         self.tokenizer = None
         self.ready = False
+        self._lenient_logs = 0
         self._load()
 
     def _load(self):
@@ -220,7 +221,16 @@ class SafetyFilter:
                         outputs = self.model.apply(self.params, input_ids, training=False)
                 except Exception as e2:
                     if os.environ.get('SAFETY_LENIENT', '').lower() in ('1', 'true', 'yes'):
-                        print(f"[SafetyFilter] score_text error; lenient mode returning 1.0: {e2}")
+                        # Rate-limit lenient logs
+                        try:
+                            limit = int(os.environ.get('SAFETY_LENIENT_LOG_LIMIT', '20'))
+                        except Exception:
+                            limit = 20
+                        self._lenient_logs += 1
+                        if self._lenient_logs <= max(0, limit):
+                            print(f"[SafetyFilter] score_text error; lenient mode returning 1.0: {e2}")
+                        elif self._lenient_logs % 1000 == 0:
+                            print(f"[SafetyFilter] lenient mode suppressed {self._lenient_logs - limit} errors so far...")
                         return 1.0
                     raise
             logits = outputs['logits'][0]

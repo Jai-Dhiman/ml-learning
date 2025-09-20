@@ -346,7 +346,10 @@ class GemmaQLoRATrainer:
         tcfg = self.cfg['training']
         # Configure reporting target (disable W&B if requested)
         report_target = "none" if (os.environ.get('WANDB_DISABLED', '').lower() in ('1','true','yes')) else ["wandb"]
-        args = TrainingArguments(
+
+        # Build TrainingArguments kwargs and filter by signature for compatibility
+        from inspect import signature
+        ta_kwargs = dict(
             output_dir="./outputs",
             per_device_train_batch_size=tcfg['batch_size'],
             per_device_eval_batch_size=tcfg['batch_size'],
@@ -366,6 +369,10 @@ class GemmaQLoRATrainer:
             report_to=report_target,
             run_name="gemma-7b-helpful-qlora",
         )
+        sig = signature(TrainingArguments.__init__)
+        filtered_kwargs = {k: v for k, v in ta_kwargs.items() if k in sig.parameters}
+        # Instantiate with backward-compatible kwargs
+        args = TrainingArguments(**filtered_kwargs)
 
         # Collator that masks non-assistant tokens using the response template marker
         response_template = "<start_of_turn>model\n"
