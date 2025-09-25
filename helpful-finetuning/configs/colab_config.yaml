@@ -14,10 +14,10 @@ optimization:
 
 # Stage 1 safety filter configuration for Colab
 safety:
-  enabled: true
+  enabled: false
   classifier_config_path: "../safety-text-classifier/configs/base_config.yaml"
   # Absolute path used in Colab after we unzip into /content/ml-learning/safety-text-classifier
-  checkpoint_dir: "/content/ml-learning/safety-text-classifier/checkpoints/best"
+  checkpoint_dir: "/content/ml-learning/safety-text-classifier/checkpoints/best_model"
 
 # Dataset overrides for Colab
 dataset:

@@ -362,7 +362,7 @@ class GemmaQLoRATrainer:
             eval_steps=tcfg['eval_steps'],
             evaluation_strategy="steps",
             save_strategy="steps",
-            load_best_model_at_end=True,
+            load_best_model_at_end=False,
             fp16=tcfg['fp16'],
             gradient_checkpointing=tcfg['gradient_checkpointing'],
             optim=tcfg['optim'],
