@@ -121,7 +121,8 @@ class HelpfulnessEvaluator:
         np.random.seed(seed)
 
         # Load models (fallback to non-4bit if bnb unavailable)
-        base = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=None, load_in_4bit=False)
+        base_model_name = self.cfg['model']['name']
+        base = GemmaInference(base_model_name=base_model_name, adapter_path=None, load_in_4bit=False)
 
         # Fail fast: ensure adapters exist locally before attempting to load
         adapter_dir = self.adapter_path
@@ -130,7 +131,7 @@ class HelpfulnessEvaluator:
                 f"LoRA adapters not found at '{adapter_dir}'. "
                 f"Please run training first or pass a valid --adapter_path pointing to a directory containing adapter_config.json."
             )
-        finetuned = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=adapter_dir, load_in_4bit=False)
+        finetuned = GemmaInference(base_model_name=base_model_name, adapter_path=adapter_dir, load_in_4bit=False)
 
         safety = SafetyFilter(
             classifier_config_path=self.cfg['safety']['classifier_config_path'],
@@ -201,8 +202,8 @@ class HelpfulnessEvaluator:
         ft_flag_rate = float(np.mean(ft_flagged)) if len(ft_flagged) else 0.0
 
         # Capability retention via perplexity proxy
-        ppl_base = self._compute_perplexity("google/gemma-7b-it", None, sample_pct=0.1)
-        ppl_ft = self._compute_perplexity("google/gemma-7b-it", adapter_dir, sample_pct=0.1)
+        ppl_base = self._compute_perplexity(base_model_name, None, sample_pct=0.1)
+        ppl_ft = self._compute_perplexity(base_model_name, adapter_dir, sample_pct=0.1)
         if np.isnan(ppl_base) or np.isnan(ppl_ft) or ppl_base <= 0.0:
             ppl_rel_degrade = float("nan")
         else:

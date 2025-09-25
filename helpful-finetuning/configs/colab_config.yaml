@@ -8,6 +8,7 @@ training:
   gradient_accumulation_steps: 16
   max_seq_length: 128
   optim: "adamw_torch"
+  gradient_checkpointing: false
 
 optimization:
   use_gradient_checkpointing: true

@@ -1,6 +1,6 @@
 # Model configuration
 model:
-  name: "google/gemma-7b-it"
+  name: "google/gemma-2b-it"
   load_in_4bit: false
   bnb_4bit_compute_dtype: "float16"
   bnb_4bit_quant_type: "nf4"
