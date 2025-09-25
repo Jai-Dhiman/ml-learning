@@ -11,6 +11,7 @@ from transformers import (
     Trainer,
     set_seed,
 )
+from transformers import Trainer as HFTrainer
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from trl import DataCollatorForCompletionOnlyLM
 
@@ -21,6 +22,12 @@ if transformers.__version__.split('.')[0] != '4':
         f"This training script requires transformers 4.x; found {transformers.__version__}. "
         f"Use 'uv sync' in Colab to install pinned versions from pyproject.toml."
     )
+
+# Trainer variant that respects device_map="auto" by not relocating modules off meta
+class NoMoveTrainer(HFTrainer):
+    def _move_model_to_device(self, model, device):
+        # Leave placement as configured by accelerate/from_pretrained (device_map="auto")
+        return model
 
 from datasets import load_dataset, get_dataset_config_names, get_dataset_split_names
 from typing import Dict, Any
@@ -382,7 +389,7 @@ class GemmaQLoRATrainer:
             tokenizer=tokenizer,
         )
 
-        trainer = Trainer(
+        trainer = NoMoveTrainer(
             model=model,
             args=args,
             train_dataset=train_ds,
