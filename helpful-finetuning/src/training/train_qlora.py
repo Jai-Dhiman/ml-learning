@@ -368,6 +368,7 @@ class GemmaQLoRATrainer:
             optim=tcfg['optim'],
             report_to=report_target,
             run_name="gemma-7b-helpful-qlora",
+            place_model_on_device=False,
         )
         sig = signature(TrainingArguments.__init__)
         filtered_kwargs = {k: v for k, v in ta_kwargs.items() if k in sig.parameters}
