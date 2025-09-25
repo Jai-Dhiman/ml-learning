@@ -98,7 +98,7 @@ class HelpfulnessEvaluator:
             n = max(50, int(len(ds) * sample_pct))
             texts = [ds[i]["text"] for i in range(n)]
             # Use a fresh GemmaInference to get tokenizer/model
-            gi = GemmaInference(base_model_name=model_name, adapter_path=adapter_path, load_in_4bit=True)
+            gi = GemmaInference(base_model_name=model_name, adapter_path=adapter_path, load_in_4bit=False)
             model = gi.get_model()
             tokenizer = gi.get_tokenizer()
             # evaluate perplexity via pipeline (evaluate accepts model_id or preloaded pipeline)

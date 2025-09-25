@@ -12,8 +12,8 @@ st.set_page_config(page_title="Stage 2: Helpful Response Comparison", page_icon=
 
 @st.cache_resource
 def load_resources():
-    base = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=None, load_in_4bit=True)
-    finetuned = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path="./lora_adapters", load_in_4bit=True)
+    base = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path=None, load_in_4bit=False)
+    finetuned = GemmaInference(base_model_name="google/gemma-7b-it", adapter_path="./lora_adapters", load_in_4bit=False)
 
     safety = SafetyFilter(
         classifier_config_path="../safety-text-classifier/configs/base_config.yaml",

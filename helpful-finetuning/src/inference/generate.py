@@ -4,7 +4,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 
 class GemmaInference:
-    def __init__(self, base_model_name: str, adapter_path: str | None = None, load_in_4bit: bool = True):
+    def __init__(self, base_model_name: str, adapter_path: str | None = None, load_in_4bit: bool = False):
         self.base_model_name = base_model_name
         self.adapter_path = adapter_path
 

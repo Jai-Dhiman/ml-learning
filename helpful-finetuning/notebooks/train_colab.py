@@ -13,16 +13,6 @@ if not os.path.exists('/content/ml-learning'):
 !uv venv
 !bash -lc 'source .venv/bin/activate && uv sync'
 
-# Ensure bitsandbytes with CUDA support and required Triton are available in this env
-!bash -lc 'source .venv/bin/activate && uv pip uninstall -y bitsandbytes || true'
-!bash -lc 'source .venv/bin/activate && python - <<\'PY\'
-import torch, re, os
-v = torch.version.cuda or ""
-digits = re.sub(r"\D", "", v) or "121"
-print("Detected CUDA version:", v, "-> BNB_CUDA_VERSION:", digits)
-open("/tmp/bnb_cuda_version", "w").write(digits)
-PY'
-!bash -lc 'export BNB_CUDA_VERSION=$(cat /tmp/bnb_cuda_version); source .venv/bin/activate && uv pip install -U triton==2.2.0 && uv pip install --pre -U --extra-index-url https://jllllll.github.io/bitsandbytes-wheels/cu${BNB_CUDA_VERSION}/ bitsandbytes==0.43.1'
 
 # Optional: Mount Google Drive for checkpoints/artifacts
 from google.colab import drive

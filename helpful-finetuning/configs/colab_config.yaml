@@ -7,6 +7,7 @@ training:
   batch_size: 1
   gradient_accumulation_steps: 16
   max_seq_length: 128
+  optim: "adamw_torch"
 
 optimization:
   use_gradient_checkpointing: true
