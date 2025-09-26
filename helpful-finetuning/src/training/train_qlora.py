@@ -400,10 +400,12 @@ class GemmaQLoRATrainer:
         trainer.train()
         trainer.save_model("./final_model")
 
-        # Save LoRA adapters explicitly; do not suppress errors (fail fast)
-        os.makedirs("./lora_adapters", exist_ok=True)
-        model.save_pretrained("./lora_adapters")
-        print("[Stage2] Saved LoRA adapters to ./lora_adapters")
+        # Save LoRA adapters explicitly to canonical repo artifacts path; do not suppress errors (fail fast)
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        adapters_dir = os.path.join(repo_root, "artifacts", "stage2_artifacts", "lora_adapters")
+        os.makedirs(adapters_dir, exist_ok=True)
+        model.save_pretrained(adapters_dir)
+        print(f"[Stage2] Saved LoRA adapters to {adapters_dir}")
 
         try:
             import wandb  # type: ignore

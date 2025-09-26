@@ -16,7 +16,8 @@ class HelpfulnessEvaluator:
     def __init__(self, config_path: str, adapter_path: str | None = None):
         with open(config_path, 'r') as f:
             self.cfg = yaml.safe_load(f)
-        self.adapter_path = adapter_path or "./lora_adapters"
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        self.adapter_path = adapter_path or os.path.join(repo_root, "artifacts", "stage2_artifacts", "lora_adapters")
         # Thresholds aligned with PRD targets
         self.thresholds = {
             'auto_win_rate_min': 0.75,           # automated helpfulness win rate target (PRD: >75%)
@@ -273,7 +274,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/base_config.yaml")
-    parser.add_argument("--adapter_path", default="./lora_adapters", help="Path to local LoRA adapters directory")
+    parser.add_argument("--adapter_path", default=None, help="Path to local LoRA adapters directory (defaults to repo_root/artifacts/stage2_artifacts/lora_adapters)")
     args = parser.parse_args()
 
     HelpfulnessEvaluator(args.config, adapter_path=args.adapter_path).run()

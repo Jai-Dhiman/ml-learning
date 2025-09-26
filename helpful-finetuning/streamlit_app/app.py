@@ -13,7 +13,11 @@ st.set_page_config(page_title="Stage 2: Helpful Response Comparison", page_icon=
 @st.cache_resource
 def load_resources():
     base = GemmaInference(base_model_name="google/gemma-2b-it", adapter_path=None, load_in_4bit=False)
-    finetuned = GemmaInference(base_model_name="google/gemma-2b-it", adapter_path="./lora_adapters", load_in_4bit=False)
+
+    # Compute canonical adapters path relative to repo root
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    adapters = os.path.join(repo_root, "artifacts", "stage2_artifacts", "lora_adapters")
+    finetuned = GemmaInference(base_model_name="google/gemma-2b-it", adapter_path=adapters, load_in_4bit=False)
 
     safety = SafetyFilter(
         classifier_config_path="../safety-text-classifier/configs/base_config.yaml",

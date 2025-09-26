@@ -56,7 +56,7 @@ class GemmaInference:
                     raise FileNotFoundError(
                         f"Expected '{cfg_path}' but it was not found. The LoRA adapters do not appear to be saved.\n"
                         f"- Ensure training completed and saved adapters.\n"
-                        f"- After training, you should see: [Stage2] Saved LoRA adapters to ./lora_adapters\n"
+                        f"- After training, you should see: [Stage2] Saved LoRA adapters to artifacts/stage2_artifacts/lora_adapters\n"
                         f"- If not present, re-run training and check for errors during save_pretrained."
                     )
                 self.model = PeftModel.from_pretrained(self.model, adapter_path)

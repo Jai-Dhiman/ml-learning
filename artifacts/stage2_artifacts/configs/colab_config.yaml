@@ -1,0 +1,17 @@
+model:
+  load_in_4bit: false
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  max_seq_length: 128
+  optim: adamw_torch
+  gradient_checkpointing: false
+optimization:
+  use_gradient_checkpointing: true
+  clear_cache_steps: 50
+safety:
+  enabled: false
+  classifier_config_path: ../safety-text-classifier/configs/base_config.yaml
+  checkpoint_dir: /content/ml-learning/safety-text-classifier/checkpoints/best_model
+dataset:
+  subset: default

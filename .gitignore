@@ -1,3 +1,10 @@
 .claude/
 WARP.md
 CLAUDE.md
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+.venv/
