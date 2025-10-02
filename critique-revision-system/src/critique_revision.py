@@ -153,14 +153,18 @@ def apply_chat_and_generate(
 
 
 def make_base_messages(system_prompt: str, user_prompt: str) -> List[Dict[str, str]]:
+    # Gemma doesn't support system role - prepend system prompt to user message
+    combined_prompt = f"{system_prompt}\n\n{user_prompt}"
     return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        {"role": "user", "content": combined_prompt},
     ]
 
 
 def make_critique_messages(user_prompt: str, base_response: str) -> List[Dict[str, str]]:
+    # Gemma doesn't support system role - include role description in user message
+    system_instruction = "You are a careful reviewer that critiques and improves assistant answers while preserving helpfulness, honesty, and safety."
     critique_instructions = (
+        system_instruction + "\n\n"
         "Task: Provide a precise, helpful, and safe answer to the user.\n"
         "User question:\n" + user_prompt + "\n\n"
         "Assistant's draft answer:\n" + base_response + "\n\n"
@@ -170,10 +174,6 @@ def make_critique_messages(user_prompt: str, base_response: str) -> List[Dict[st
         "Only output the two sections starting with 'Critique:' and 'Revised:'."
     )
     return [
-        {
-            "role": "system",
-            "content": "You are a careful reviewer that critiques and improves assistant answers while preserving helpfulness, honesty, and safety.",
-        },
         {"role": "user", "content": critique_instructions},
     ]
 
