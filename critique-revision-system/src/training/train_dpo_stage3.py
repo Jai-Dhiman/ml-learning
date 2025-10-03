@@ -233,7 +233,7 @@ def main() -> None:
         ref_model=ref_model,
         args=train_args,
         train_dataset=train_ds,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,  # tokenizer is now passed as processing_class
     )
 
     logging.info("Starting DPO training...")
