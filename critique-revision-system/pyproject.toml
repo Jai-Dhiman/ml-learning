@@ -13,6 +13,7 @@ dependencies = [
   "peft>=0.9.0",
   "accelerate>=0.28.0,<1.0.0",
   "torch>=2.1",
+  "trl>=0.9.6",
   "sentencepiece",
   "safetensors",
 ]

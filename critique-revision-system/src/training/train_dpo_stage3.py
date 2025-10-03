@@ -15,7 +15,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from trl import DPOTrainer
+from trl import DPOTrainer, DPOConfig
 from peft import PeftModel
 
 # Disable W&B and reduce noisy logs by default
@@ -206,8 +206,8 @@ def main() -> None:
             trust_remote_code=True,
         )
 
-    # Training arguments — W&B disabled
-    train_args = TrainingArguments(
+    # Training arguments with DPO configuration — W&B disabled
+    train_args = DPOConfig(
         output_dir=str(checkpoints_dir),
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -224,13 +224,13 @@ def main() -> None:
         bf16=False,
         dataloader_pin_memory=True,
         seed=args.seed,
+        beta=args.beta,  # DPO beta parameter now in config
     )
 
     logging.info("Initializing DPOTrainer...")
     trainer = DPOTrainer(
         model=model,
         ref_model=ref_model,
-        beta=args.beta,
         args=train_args,
         train_dataset=train_ds,
         tokenizer=tokenizer,
