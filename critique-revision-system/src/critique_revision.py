@@ -146,33 +146,72 @@ def apply_chat_and_generate(
     gen_ids = out.sequences[0][input_ids.shape[-1]:]
     text = tokenizer.decode(gen_ids, skip_special_tokens=False)
 
+    # Clean up end-of-turn tokens
     eot = "<end_of_turn>"
     idx = text.find(eot)
     if idx != -1:
         text = text[:idx]
+    
+    # Remove multi-turn dialogue artifacts (Human:, H:, Assistant:, A:)
+    text = _clean_multi_turn_artifacts(text)
+    
+    return text.strip()
+
+
+def _clean_multi_turn_artifacts(text: str) -> str:
+    """
+    Remove hallucinated multi-turn dialogue from model output.
+    Keeps only the first assistant response before any Human/User markers.
+    """
+    # Stop at any indication of a new human turn
+    stop_markers = [
+        "\n\nHuman:", "\nHuman:", "\nH:",
+        "\n\nUser:", "\nUser:", "\nU:",
+        "\n\nAssistant:", "\nAssistant:", "\nA:",
+    ]
+    
+    earliest_stop = len(text)
+    for marker in stop_markers:
+        idx = text.find(marker)
+        if idx != -1 and idx < earliest_stop:
+            earliest_stop = idx
+    
+    if earliest_stop < len(text):
+        text = text[:earliest_stop]
+    
     return text.strip()
 
 
 def make_base_messages(system_prompt: str, user_prompt: str) -> List[Dict[str, str]]:
     # Gemma doesn't support system role - prepend system prompt to user message
-    combined_prompt = f"{system_prompt}\n\n{user_prompt}"
+    # Add explicit instruction to prevent multi-turn hallucination
+    combined_prompt = (
+        f"{system_prompt}\n\n"
+        f"Provide a single, complete response to this question. "
+        f"Do not simulate a conversation or include 'Human:', 'Assistant:', or other dialogue markers.\n\n"
+        f"Question: {user_prompt}\n\n"
+        f"Answer:"
+    )
     return [
         {"role": "user", "content": combined_prompt},
     ]
 
 
 def make_critique_messages(user_prompt: str, base_response: str) -> List[Dict[str, str]]:
-    # Gemma doesn't support system role - include role description in user message
-    system_instruction = "You are a careful reviewer that critiques and improves assistant answers while preserving helpfulness, honesty, and safety."
+    # Improved critique prompt that prevents meta-commentary and ensures clean output
     critique_instructions = (
-        system_instruction + "\n\n"
-        "Task: Provide a precise, helpful, and safe answer to the user.\n"
-        "User question:\n" + user_prompt + "\n\n"
-        "Assistant's draft answer:\n" + base_response + "\n\n"
-        "Write two sections exactly in this format:\n"
-        "Critique: Briefly identify issues (accuracy, clarity, completeness, safety).\n"
-        "Revised: A fully revised answer. Be concise, correct, and safe.\n"
-        "Only output the two sections starting with 'Critique:' and 'Revised:'."
+        "You are a careful reviewer. Your task is to critique and revise an answer.\n\n"
+        f"ORIGINAL QUESTION: {user_prompt}\n\n"
+        f"DRAFT ANSWER: {base_response}\n\n"
+        "INSTRUCTIONS:\n"
+        "1. Identify any issues with the draft (accuracy, clarity, safety, completeness)\n"
+        "2. Write an improved version that directly answers the question\n"
+        "3. Do NOT write meta-commentary like 'Assistant answers' or 'The answer is'\n"
+        "4. Do NOT simulate dialogue with 'Human:', 'Assistant:', etc.\n\n"
+        "FORMAT YOUR RESPONSE EXACTLY LIKE THIS:\n"
+        "Critique: [Brief analysis of issues]\n\n"
+        "Revised: [Your improved answer that DIRECTLY responds to the user]\n\n"
+        "Now provide your critique and revision:"
     )
     return [
         {"role": "user", "content": critique_instructions},
@@ -180,12 +219,14 @@ def make_critique_messages(user_prompt: str, base_response: str) -> List[Dict[st
 
 
 def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
+    """Parse critique output and clean up any remaining artifacts."""
     c_tag = "Critique:"
     r_tag = "Revised:"
     c_idx = text.find(c_tag)
     r_idx = text.find(r_tag)
     critic_notes = ""
     revised = fallback_response
+    
     if c_idx != -1 and r_idx != -1 and r_idx > c_idx:
         critic_notes = text[c_idx + len(c_tag):r_idx].strip()
         revised = text[r_idx + len(r_tag):].strip()
@@ -193,8 +234,61 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
         critic_notes = text[:r_idx].strip()
         revised = text[r_idx + len(r_tag):].strip()
     else:
+        # Fallback: no clear structure, use fallback response
         critic_notes = text[:512].strip()
+        revised = fallback_response
+    
+    # Clean meta-commentary from revised response
+    revised = _clean_meta_commentary(revised)
+    
     return critic_notes, revised
+
+
+def _clean_meta_commentary(text: str) -> str:
+    """
+    Remove meta-commentary phrases that talk about the answer instead of being the answer.
+    """
+    # Remove common meta-commentary patterns from the start
+    meta_patterns = [
+        "Assistant answers",
+        "Assistant is",
+        "The assistant",
+        "The answer is",
+        "The revised answer",
+        "The draft answer",
+        "This answer",
+        "This response",
+    ]
+    
+    lines = text.split("\n")
+    cleaned_lines = []
+    
+    for line in lines:
+        line_stripped = line.strip()
+        # Skip lines that are pure meta-commentary
+        if any(line_stripped.startswith(pattern) for pattern in meta_patterns):
+            # Check if rest of line has actual content after the meta-phrase
+            has_content = False
+            for pattern in meta_patterns:
+                if line_stripped.startswith(pattern):
+                    remainder = line_stripped[len(pattern):].strip()
+                    # If there's meaningful content after removing pattern, keep it
+                    if len(remainder) > 20 and not remainder.startswith(("that", "which", "is", "are")):
+                        cleaned_lines.append(remainder)
+                        has_content = True
+                    break
+            if not has_content:
+                continue
+        else:
+            cleaned_lines.append(line)
+    
+    result = "\n".join(cleaned_lines).strip()
+    
+    # If we cleaned everything away, return original
+    if not result or len(result) < 10:
+        return text
+    
+    return result
 
 
 class RewardScorer:
