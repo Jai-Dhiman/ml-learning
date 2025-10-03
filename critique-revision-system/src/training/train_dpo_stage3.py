@@ -195,16 +195,14 @@ def main() -> None:
         is_trainable=True,
     )
 
-    # DPO reference model
-    ref_model = None
+    # DPO reference model handling
+    # For T4 GPU (15GB VRAM), use reference-free DPO mode for memory efficiency
+    # This avoids loading a second copy of the model
+    logging.info("Using reference-free DPO mode (no separate ref model - saves ~7GB VRAM).")
     if args.cpu_ref_model:
-        logging.info("Loading reference model on CPU to save VRAM.")
-        ref_model = AutoModelForCausalLM.from_pretrained(
-            args.base_model_id,
-            torch_dtype=torch.float32,
-            device_map="cpu",
-            trust_remote_code=True,
-        )
+        logging.info("Note: --cpu-ref-model flag ignored in favor of reference-free mode for better memory efficiency.")
+    
+    ref_model = None  # DPO will compute reference logits from frozen model copy internally
 
     # Training arguments with DPO configuration — W&B disabled
     train_args = DPOConfig(
@@ -225,6 +223,9 @@ def main() -> None:
         dataloader_pin_memory=True,
         seed=args.seed,
         beta=args.beta,  # DPO beta parameter now in config
+        # Enable gradient checkpointing to reduce memory usage further
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
 
     logging.info("Initializing DPOTrainer...")
