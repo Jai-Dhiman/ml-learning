@@ -3,6 +3,7 @@ import json
 import os
 import random
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -375,6 +376,7 @@ def stage3_loop(args: Args) -> Dict[str, Any]:
 
     with out_path.open("w", encoding="utf-8") as f:
         for i, prompt in enumerate(prompts, start=1):
+            start_time = time.time()
             try:
                 base_messages = make_base_messages(args.system_prompt, prompt)
                 base_resp = apply_chat_and_generate(
@@ -421,11 +423,14 @@ def stage3_loop(args: Args) -> Dict[str, Any]:
                 if chosen == "revised":
                     revised_wins += 1
                 score_delta_sum += (revised_score - base_score)
+                elapsed = time.time() - start_time
 
-                if i % 10 == 0 or i == len(prompts):
-                    print(
-                        f"[Stage3] Progress {i}/{len(prompts)} | wins={revised_wins} | avg_delta={(score_delta_sum / max(1, processed)):.4f}"
-                    )
+                # Log every example for better visibility
+                print(
+                    f"[Stage3] Progress {i}/{len(prompts)} | wins={revised_wins}/{processed} | "
+                    f"avg_delta={(score_delta_sum / max(1, processed)):.4f} | "
+                    f"chosen={chosen} | time={elapsed:.1f}s"
+                )
             except Exception as ex:
                 errors += 1
                 print(f"[Stage3] Error at index {i}: {ex}")
