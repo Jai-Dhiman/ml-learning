@@ -1,10 +1,76 @@
+# IDE and Development Tools
 .claude/
+.vscode/
+.idea/
 WARP.md
 CLAUDE.md
+.DS_Store
 
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.so
 env/
 .venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Model Files and Checkpoints (>10MB)
+# Keep only final LoRA adapters in artifacts/stage*_artifacts/lora_adapters/
+artifacts/stage*_artifacts/checkpoints/
+artifacts/stage*_artifacts/preflight_run/
+*.pt
+*.pth
+*.ckpt
+*.bin
+optimizer.pt
+scheduler.pt
+trainer_state.json
+
+# Large Model Archives
+*.zip
+*.tar.gz
+*.tar
+*.gz
+
+# Tokenizer files (large JSON files - 33MB each)
+# These can be regenerated from the model
+tokenizer.json
+
+# Papers and Documentation
+Constitutional AI- Harmlessness from AI Feedback.pdf
+*.pdf
+
+# Logs and Outputs
+logs/
+*.log
+runs/
+wandb/
+.wandb/
+
+# Data and Datasets
+data/raw/
+data/processed/
+*.csv
+# Exclude large JSONL datasets but keep important artifacts
+*.jsonl
+# Keep important artifacts
+!artifacts/evaluation/*.jsonl
+!artifacts/stage*_artifacts/pairs/*.jsonl
+!artifacts/stage*_artifacts/dpo_dataset/*.jsonl
+!artifacts/stage*_artifacts/eval/*.jsonl
+!**/test_prompts.jsonl
+
+# Temporary Files
+*.tmp
+*.bak
+*.swp
+*~
