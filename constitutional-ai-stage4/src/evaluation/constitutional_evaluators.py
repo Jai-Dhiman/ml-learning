@@ -12,7 +12,7 @@ Date: October 4, 2025
 """
 
 import re
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 from .base_evaluator import BaseEvaluator, EvaluationResult
 import logging
 
