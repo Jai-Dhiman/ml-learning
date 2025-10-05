@@ -115,35 +115,57 @@ class EvaluationRunner:
     def load_test_prompts(
         self,
         test_file: Optional[Path] = None,
-        max_prompts: Optional[int] = None
+        max_prompts: Optional[int] = None,
+        require_exact_count: Optional[int] = None
     ) -> List[str]:
         """
-        Load test prompts from file or use defaults.
+        Load test prompts from file.
         
         Args:
-            test_file: Path to test prompts file (JSONL)
+            test_file: Path to test prompts file (JSONL) - REQUIRED
             max_prompts: Maximum number of prompts to load
+            require_exact_count: If set, fail if file doesn't have exactly this many prompts
             
         Returns:
             List of test prompts
+            
+        Raises:
+            FileNotFoundError: If test_file doesn't exist
+            ValueError: If require_exact_count is set and count doesn't match
         """
-        if test_file and test_file.exists():
-            logger.info(f"Loading test prompts from {test_file}")
-            prompts = []
-            
-            with open(test_file, 'r') as f:
-                for line in f:
-                    data = json.loads(line)
-                    prompts.append(data.get('prompt', ''))
-            
-            if max_prompts:
-                prompts = prompts[:max_prompts]
-            
-            logger.info(f"Loaded {len(prompts)} test prompts")
-            return prompts
-        else:
-            logger.info("Using default test prompts")
-            return self._get_default_test_prompts()
+        if not test_file:
+            raise ValueError(
+                "test_file is required. No default prompts available. "
+                "Please provide --test-file argument with path to JSONL file."
+            )
+        
+        if not test_file.exists():
+            raise FileNotFoundError(
+                f"Test prompts file not found: {test_file}\n"
+                f"Make sure the file exists in your repository and is committed to git."
+            )
+        
+        logger.info(f"Loading test prompts from {test_file}")
+        prompts = []
+        
+        with open(test_file, 'r') as f:
+            for line in f:
+                data = json.loads(line)
+                prompts.append(data.get('prompt', ''))
+        
+        logger.info(f"Loaded {len(prompts)} test prompts from file")
+        
+        # Check required count if specified
+        if require_exact_count and len(prompts) != require_exact_count:
+            raise ValueError(
+                f"Expected exactly {require_exact_count} prompts, but found {len(prompts)} in {test_file}"
+            )
+        
+        if max_prompts:
+            prompts = prompts[:max_prompts]
+            logger.info(f"Using first {len(prompts)} prompts (limited by --max-prompts)")
+        
+        return prompts
     
     def _get_default_test_prompts(self) -> List[str]:
         """Get default test prompts covering all principles."""
@@ -211,6 +233,7 @@ class EvaluationRunner:
         
         # Generate responses
         logger.info(f"Generating {len(prompts)} responses...")
+        print(f"\n[Progress] Starting generation of {len(prompts)} responses for {model_name} model...")
         responses = []
         
         for i, prompt in enumerate(prompts):
@@ -224,17 +247,22 @@ class EvaluationRunner:
                 )
                 responses.append(response)
                 
+                # More frequent progress updates
                 if (i + 1) % 5 == 0:
                     logger.info(f"Generated {i + 1}/{len(prompts)} responses")
+                    print(f"[Progress] Generated {i + 1}/{len(prompts)} responses ({(i+1)/len(prompts)*100:.1f}%)")
                     
             except Exception as e:
                 logger.error(f"Error generating response {i}: {e}")
+                print(f"[Error] Failed to generate response {i}: {e}")
                 responses.append(f"[Error: {str(e)}]")
         
         logger.info(f"✓ Generated {len(responses)} responses")
+        print(f"[Progress] ✓ Completed generation. Starting constitutional evaluations...")
         
         # Evaluate responses
         logger.info("Running constitutional evaluations...")
+        print(f"[Progress] Evaluating {len(responses)} responses across 4 constitutional principles...")
         principle_results = self.composite_evaluator.evaluate_batch(
             prompts,
             responses
