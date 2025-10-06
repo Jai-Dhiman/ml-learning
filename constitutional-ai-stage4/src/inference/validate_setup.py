@@ -130,6 +130,26 @@ def validate_dependencies():
 
 def main():
     """Run complete validation."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Validate Constitutional AI model loader setup"
+    )
+    parser.add_argument(
+        '--stage2-adapter-path',
+        type=str,
+        default="../artifacts/stage2_artifacts/lora_adapters",
+        help='Path to Stage 2 LoRA adapters'
+    )
+    parser.add_argument(
+        '--stage3-adapter-path',
+        type=str,
+        default="../artifacts/stage3_artifacts/models/lora_adapters",
+        help='Path to Stage 3 LoRA adapters'
+    )
+    
+    args = parser.parse_args()
+    
     logger.info("=" * 60)
     logger.info("Constitutional AI Model Loader Validation")
     logger.info("=" * 60)
@@ -138,11 +158,11 @@ def main():
     deps_valid = validate_dependencies()
     
     # Validate Stage 2 adapters
-    stage2_path = Path("../artifacts/stage2_artifacts/lora_adapters")
+    stage2_path = Path(args.stage2_adapter_path)
     stage2_valid = validate_adapter_files(stage2_path, "Stage 2 (Helpful RLHF)")
     
     # Validate Stage 3 adapters
-    stage3_path = Path("../artifacts/stage3_artifacts/models/lora_adapters")
+    stage3_path = Path(args.stage3_adapter_path)
     stage3_valid = validate_adapter_files(stage3_path, "Stage 3 (Constitutional AI)")
     
     # Summary

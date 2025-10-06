@@ -87,7 +87,9 @@ class EvaluationRunner:
     def __init__(
         self,
         output_dir: Optional[Path] = None,
-        config: Optional[Dict] = None
+        config: Optional[Dict] = None,
+        stage2_adapters_path: Optional[str] = None,
+        stage3_adapters_path: Optional[str] = None,
     ):
         """
         Initialize evaluation runner.
@@ -95,15 +97,20 @@ class EvaluationRunner:
         Args:
             output_dir: Directory to save results
             config: Configuration dictionary
+            stage2_adapters_path: Custom path to Stage 2 LoRA adapters (e.g., from Google Drive)
+            stage3_adapters_path: Custom path to Stage 3 LoRA adapters (e.g., from Google Drive)
         """
         self.output_dir = Path(output_dir) if output_dir else Path("artifacts/evaluation")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         self.config = config or {}
         
-        # Initialize model loader
+        # Initialize model loader with custom paths if provided
         logger.info("Initializing model loader...")
-        self.model_loader = ConstitutionalAIModels()
+        self.model_loader = ConstitutionalAIModels(
+            stage2_adapters_path=stage2_adapters_path,
+            stage3_adapters_path=stage3_adapters_path,
+        )
         
         # Initialize evaluators
         logger.info("Initializing constitutional evaluators...")
@@ -561,11 +568,25 @@ def main():
         action='store_true',
         help='Do not save results to disk'
     )
+    parser.add_argument(
+        '--stage2-adapter-path',
+        type=str,
+        help='Path to Stage 2 LoRA adapters (e.g., from Google Drive)'
+    )
+    parser.add_argument(
+        '--stage3-adapter-path',
+        type=str,
+        help='Path to Stage 3 LoRA adapters (e.g., from Google Drive)'
+    )
     
     args = parser.parse_args()
     
     # Initialize runner
-    runner = EvaluationRunner(output_dir=args.output_dir)
+    runner = EvaluationRunner(
+        output_dir=args.output_dir,
+        stage2_adapters_path=args.stage2_adapter_path,
+        stage3_adapters_path=args.stage3_adapter_path,
+    )
     
     # Run evaluation
     runner.run_evaluation(
