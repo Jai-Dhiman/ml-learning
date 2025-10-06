@@ -24,13 +24,18 @@ build/
 *.ipynb_checkpoints
 
 # Model Files and Checkpoints (>10MB)
-# Keep only final LoRA adapters in artifacts/stage*_artifacts/lora_adapters/
+# Exclude all stage artifacts - these are too large for git
+# Download from Google Drive or regenerate via training
+artifacts/stage2_finetuning_artifacts/
+artifacts/stage3_constitutional/
 artifacts/stage*_artifacts/checkpoints/
 artifacts/stage*_artifacts/preflight_run/
+artifacts/stage*_artifacts/outputs/
 *.pt
 *.pth
 *.ckpt
 *.bin
+*.safetensors
 optimizer.pt
 scheduler.pt
 trainer_state.json
