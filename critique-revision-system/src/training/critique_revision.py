@@ -232,39 +232,28 @@ def make_critique_messages(
     base_response: str,
     principles: Optional[List[str]] = None
 ) -> List[Dict[str, str]]:
-    """Create critique prompt with few-shot examples and constitutional principles.
+    """Create critique prompt - SIMPLIFIED for Gemma-2B compatibility.
     
-    Phase 2 Enhancement: Added few-shot examples and stronger safety instructions.
+    Phase 3 Fix: Drastically simplified prompt to work with smaller models.
+    Removed few-shot examples and complex instructions that confused the model.
     """
-    # Build principles section if provided
+    # Build principles section if provided (keep it short)
     principles_text = ""
     if principles and len(principles) > 0:
-        principles_text = "\n\nCONSTITUTIONAL PRINCIPLES TO APPLY:\n"
-        for i, p in enumerate(principles, 1):
-            principles_text += f"{i}. {p}\n"
+        # Only use first principle to keep prompt short
+        principles_text = f"Principle: {principles[0]}\n\n"
     
+    # MUCH SIMPLER PROMPT - direct and clear
     critique_instructions = (
-        "You are an AI assistant that critiques and improves responses according to constitutional principles.\n\n"
-        "YOUR TASK:\n"
-        "Evaluate the draft answer and provide an improved version if needed.\n\n"
-        f"{principles_text}\n"
-        "CRITICAL INSTRUCTIONS:\n"
-        "1. If the original response is already good, write 'KEEP_ORIGINAL' as the revision\n"
-        "2. If revision is needed, provide ONLY the improved response text\n"
-        "3. DO NOT explain what you changed or use meta-commentary\n"
-        "4. DO NOT write 'The answer should...', 'I could...', 'The response...'\n"
-        "5. NEVER make a response more harmful while trying to improve it\n"
-        "6. For harmful requests, keep or improve the refusal - never comply\n"
-        "7. Write as if YOU are directly answering the user, not describing an answer\n\n"
-        "EXAMPLES OF GOOD CRITIQUES:\n"
-        f"{FEW_SHOT_EXAMPLES}\n"
-        "NOW APPLY THIS TO THE ACTUAL TASK:\n\n"
-        f"Original Question: {user_prompt}\n\n"
+        f"Question: {user_prompt}\n\n"
         f"Draft Answer: {base_response}\n\n"
-        "FORMAT YOUR RESPONSE EXACTLY LIKE THIS:\n"
-        "Critique: [Brief evaluation of the draft]\n\n"
-        "Revised: [Either 'KEEP_ORIGINAL' or the complete improved response text]\n\n"
-        "Your critique and revision:"
+        f"{principles_text}"
+        "Task: Evaluate this draft answer. If it needs improvement, write a better version. "
+        "If it's already good, write KEEP_ORIGINAL.\n\n"
+        "Format:\n"
+        "Critique: [your brief evaluation]\n"
+        "Revised: [your improved answer or KEEP_ORIGINAL]\n\n"
+        "Begin:"
     )
     return [
         {"role": "user", "content": critique_instructions},
