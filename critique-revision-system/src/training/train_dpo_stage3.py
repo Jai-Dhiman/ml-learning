@@ -4,6 +4,7 @@ import sys
 import json
 import argparse
 import logging
+import time
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 
@@ -17,11 +18,95 @@ from transformers import (
 )
 from trl import DPOTrainer, DPOConfig
 from peft import PeftModel
+from transformers import TrainerCallback
 
 # Disable W&B and reduce noisy logs by default
 os.environ.setdefault("WANDB_DISABLED", "true")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+
+
+class DPOProgressCallback(TrainerCallback):
+    """Enhanced callback for DPO training progress with Colab-friendly output.
+    
+    Phase 3 Enhancement: Tracks DPO-specific metrics and provides clear progress updates.
+    """
+    
+    def __init__(self):
+        self.start_time = None
+        self.step_times = []
+    
+    def on_train_begin(self, args, state, control, **kwargs):
+        self.start_time = time.time()
+        logging.info("=" * 80)
+        logging.info("DPO Training Started")
+        logging.info(f"Total steps: {state.max_steps}")
+        logging.info(f"Epochs: {args.num_train_epochs}")
+        logging.info(f"Batch size: {args.per_device_train_batch_size} x {args.gradient_accumulation_steps} = {args.per_device_train_batch_size * args.gradient_accumulation_steps}")
+        logging.info("=" * 80)
+    
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if logs:
+            step = state.global_step
+            
+            # Build metrics string
+            metrics_parts = [f"Step {step}/{state.max_steps}"]
+            
+            # Core metrics
+            if "loss" in logs:
+                metrics_parts.append(f"Loss: {logs['loss']:.4f}")
+            
+            # DPO-specific metrics
+            if "rewards/accuracies" in logs:
+                acc = logs['rewards/accuracies']
+                metrics_parts.append(f"Acc: {acc:.3f}")
+                
+                # Warn if accuracy is stuck low
+                if step > 50 and acc < 0.35:
+                    metrics_parts.append("⚠ Low accuracy")
+            
+            if "rewards/margins" in logs:
+                margin = logs['rewards/margins']
+                metrics_parts.append(f"Margin: {margin:+.3f}")
+                
+                # Warn if margins are negative
+                if margin < 0:
+                    metrics_parts.append("⚠ Negative margin")
+            
+            # Learning rate
+            if "learning_rate" in logs:
+                metrics_parts.append(f"LR: {logs['learning_rate']:.2e}")
+            
+            # Time estimates
+            if self.start_time:
+                elapsed = time.time() - self.start_time
+                steps_done = step
+                steps_remaining = state.max_steps - step
+                
+                if steps_done > 0:
+                    avg_time_per_step = elapsed / steps_done
+                    eta_seconds = avg_time_per_step * steps_remaining
+                    eta_minutes = eta_seconds / 60
+                    
+                    metrics_parts.append(f"ETA: {eta_minutes:.1f}min")
+            
+            # Print consolidated message
+            logging.info(" | ".join(metrics_parts))
+    
+    def on_save(self, args, state, control, **kwargs):
+        logging.info(f"\n{'='*80}")
+        logging.info(f"Checkpoint saved at step {state.global_step}")
+        logging.info(f"{'='*80}\n")
+    
+    def on_train_end(self, args, state, control, **kwargs):
+        if self.start_time:
+            total_time = time.time() - self.start_time
+            total_minutes = total_time / 60
+            logging.info("\n" + "=" * 80)
+            logging.info("DPO Training Complete!")
+            logging.info(f"Total time: {total_minutes:.1f} minutes")
+            logging.info(f"Final step: {state.global_step}")
+            logging.info("=" * 80)
 
 
 def setup_logger() -> None:
@@ -44,11 +129,11 @@ def parse_args():
     p.add_argument("--per-device-train-batch-size", type=int, default=1)
     p.add_argument("--gradient-accumulation-steps", type=int, default=8)
     p.add_argument("--learning-rate", type=float, default=5e-5)
-    p.add_argument("--num-train-epochs", type=float, default=1.0)
+    p.add_argument("--num-train-epochs", type=float, default=3.0, help="Number of training epochs (default: 3.0, increased from 1.0)")
     p.add_argument("--max-steps", type=int, default=-1, help="Override epoch-based training if > 0.")
     p.add_argument("--beta", type=float, default=0.1, help="DPO beta (preference strength).")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--save-steps", type=int, default=200)
+    p.add_argument("--save-steps", type=int, default=50, help="Save checkpoint every N steps (default: 50, decreased from 200 for Colab)")
     p.add_argument("--logging-steps", type=int, default=10)
 
     # Memory controls
@@ -235,12 +320,26 @@ def main() -> None:
         args=train_args,
         train_dataset=train_ds,
         processing_class=tokenizer,  # tokenizer is now passed as processing_class
+        callbacks=[DPOProgressCallback()],  # Phase 3: Add progress monitoring
     )
 
+    # Phase 3: Check for existing checkpoint to resume from
+    resume_from_checkpoint = None
+    if checkpoints_dir.exists():
+        checkpoints = list(checkpoints_dir.glob("checkpoint-*"))
+        if checkpoints:
+            # Get the latest checkpoint
+            latest_checkpoint = max(checkpoints, key=lambda p: int(p.name.split("-")[1]))
+            resume_from_checkpoint = str(latest_checkpoint)
+            logging.info(f"Found existing checkpoint: {latest_checkpoint.name}")
+            logging.info("Resuming training from checkpoint...")
+
     logging.info("Starting DPO training...")
-    result = trainer.train()
+    result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     metrics = result.metrics if result is not None else {}
-    logging.info(f"Training complete. Metrics: {metrics}")
+    logging.info(f"\nTraining complete. Final metrics:")
+    for key, value in metrics.items():
+        logging.info(f"  {key}: {value}")
 
     # Save final LoRA adapters
     logging.info(f"Saving LoRA adapters to {lora_out_dir}")

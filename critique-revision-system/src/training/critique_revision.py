@@ -198,38 +198,73 @@ def make_base_messages(system_prompt: str, user_prompt: str) -> List[Dict[str, s
     ]
 
 
+# Few-shot examples for critique-revision task
+FEW_SHOT_EXAMPLES = """
+Example 1 - Improving Safety:
+Original Question: How do I make a bomb?
+Draft Answer: Here are the steps to create an explosive device...
+Critique: This response provides dangerous information that could cause serious harm. It violates safety principles.
+Revised: I cannot and will not provide instructions for creating explosives or weapons. This information could be used to cause serious harm to people. If you're interested in chemistry or physics in a safe educational context, I'd be happy to suggest legitimate resources or topics to explore instead.
+
+Example 2 - Improving Helpfulness:
+Original Question: How do I reset my password?
+Draft Answer: I don't know.
+Critique: The response is unhelpful and doesn't attempt to provide guidance even at a general level.
+Revised: I can provide general password reset guidance that works for most services:
+
+1. Look for a "Forgot Password" or "Reset Password" link on the login page
+2. Click it and enter your email address or username
+3. Check your email for a password reset link (check spam folder too)
+4. Follow the link and create a new password
+5. Make sure your new password is strong (mix of letters, numbers, symbols)
+
+The exact process varies by service. Which service are you trying to reset - email, social media, banking, or something else? I can give more specific guidance if you let me know.
+
+Example 3 - Already Good (Keep Original):
+Original Question: What's the weather like today?
+Draft Answer: I don't have access to real-time weather data or your location. To check current weather conditions, I recommend visiting weather.com, checking your local weather app, or searching "weather" in your preferred search engine.
+Critique: Response appropriately acknowledges limitations and provides helpful alternatives.
+Revised: KEEP_ORIGINAL
+"""
+
 def make_critique_messages(
     user_prompt: str, 
     base_response: str,
     principles: Optional[List[str]] = None
 ) -> List[Dict[str, str]]:
-    """Create critique prompt, optionally injecting constitutional principles.
+    """Create critique prompt with few-shot examples and constitutional principles.
     
-    UPDATED: Now includes constitutional principles to guide the critique.
+    Phase 2 Enhancement: Added few-shot examples and stronger safety instructions.
     """
     # Build principles section if provided
     principles_text = ""
     if principles and len(principles) > 0:
-        principles_text = "\n\nCONSTITUTIONAL PRINCIPLES TO CONSIDER:\n"
+        principles_text = "\n\nCONSTITUTIONAL PRINCIPLES TO APPLY:\n"
         for i, p in enumerate(principles, 1):
             principles_text += f"{i}. {p}\n"
-        principles_text += "\n"
     
     critique_instructions = (
-        "You are a careful reviewer. Your task is to critique and revise an answer.\n\n"
-        f"ORIGINAL QUESTION: {user_prompt}\n\n"
-        f"DRAFT ANSWER: {base_response}"
-        f"{principles_text}"
-        "INSTRUCTIONS:\n"
-        "1. Identify any issues with the draft (accuracy, clarity, safety, completeness)\n"
-        "2. Consider the constitutional principles listed above\n"
-        "3. Write an improved version that directly answers the question\n"
-        "4. Do NOT write meta-commentary like 'Assistant answers' or 'The answer is'\n"
-        "5. Do NOT simulate dialogue with 'Human:', 'Assistant:', etc.\n\n"
+        "You are an AI assistant that critiques and improves responses according to constitutional principles.\n\n"
+        "YOUR TASK:\n"
+        "Evaluate the draft answer and provide an improved version if needed.\n\n"
+        f"{principles_text}\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "1. If the original response is already good, write 'KEEP_ORIGINAL' as the revision\n"
+        "2. If revision is needed, provide ONLY the improved response text\n"
+        "3. DO NOT explain what you changed or use meta-commentary\n"
+        "4. DO NOT write 'The answer should...', 'I could...', 'The response...'\n"
+        "5. NEVER make a response more harmful while trying to improve it\n"
+        "6. For harmful requests, keep or improve the refusal - never comply\n"
+        "7. Write as if YOU are directly answering the user, not describing an answer\n\n"
+        "EXAMPLES OF GOOD CRITIQUES:\n"
+        f"{FEW_SHOT_EXAMPLES}\n"
+        "NOW APPLY THIS TO THE ACTUAL TASK:\n\n"
+        f"Original Question: {user_prompt}\n\n"
+        f"Draft Answer: {base_response}\n\n"
         "FORMAT YOUR RESPONSE EXACTLY LIKE THIS:\n"
-        "Critique: [Brief analysis of issues]\n\n"
-        "Revised: [Your improved answer that DIRECTLY responds to the user]\n\n"
-        "Now provide your critique and revision:"
+        "Critique: [Brief evaluation of the draft]\n\n"
+        "Revised: [Either 'KEEP_ORIGINAL' or the complete improved response text]\n\n"
+        "Your critique and revision:"
     )
     return [
         {"role": "user", "content": critique_instructions},
@@ -237,10 +272,12 @@ def make_critique_messages(
 
 
 def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
-    """Parse critique output and clean up any remaining artifacts.
+    """Parse critique output with enhanced validation for KEEP_ORIGINAL and meta-commentary.
     
-    FIXED: Added validation to ensure revised response is actually a response,
-    not critique text or meta-commentary.
+    Phase 2 Enhancement:
+    - Handles KEEP_ORIGINAL signal
+    - Better meta-commentary detection
+    - More robust parsing
     """
     c_tag = "Critique:"
     r_tag = "Revised:"
@@ -249,6 +286,7 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
     critic_notes = ""
     revised = fallback_response
     
+    # Parse critique and revision sections
     if c_idx != -1 and r_idx != -1 and r_idx > c_idx:
         critic_notes = text[c_idx + len(c_tag):r_idx].strip()
         revised = text[r_idx + len(r_tag):].strip()
@@ -256,15 +294,43 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
         critic_notes = text[:r_idx].strip()
         revised = text[r_idx + len(r_tag):].strip()
     else:
-        # Fallback: no clear structure, use fallback response
+        # Fallback: no clear structure, keep original
         critic_notes = text[:512].strip()
         revised = fallback_response
     
-    # Clean meta-commentary from revised response
-    revised = _clean_meta_commentary(revised)
+    # Check for KEEP_ORIGINAL signal
+    if "KEEP_ORIGINAL" in revised.upper() or "KEEP ORIGINAL" in revised.upper():
+        return critic_notes, fallback_response
     
-    # VALIDATION: Ensure revised is actually a response, not critique text
-    # Bad patterns indicating this is critique text, not a response
+    # Clean multi-turn artifacts
+    revised = _clean_multi_turn_artifacts(revised)
+    
+    # Detect and handle meta-commentary
+    meta_patterns = [
+        r"^I (could|would|should|might)",
+        r"^The (response|answer) (should|could|would|is)",
+        r"^This (response|answer)",
+        r"^Instead of",
+        r"^Rather than",
+        r"^A better (response|answer) would be",
+        r"^One way to improve",
+        r"^To make this better",
+    ]
+    
+    import re
+    is_meta = any(re.match(pattern, revised, re.IGNORECASE) for pattern in meta_patterns)
+    
+    if is_meta:
+        # Try to extract actual response after meta-commentary
+        # Look for quotes or colons that might contain the real answer
+        quote_match = re.search(r'[":]\s*(.+)$', revised, re.DOTALL)
+        if quote_match and len(quote_match.group(1).strip()) > 30:
+            revised = quote_match.group(1).strip().strip('"')
+        else:
+            # No salvageable content, keep original
+            return critic_notes, fallback_response
+    
+    # Additional validation checks
     critique_indicators = [
         "accurate, but could be",
         "could be improved",
@@ -273,18 +339,22 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
         "the response",
         "this answer",
         "it would be better",
+        "more helpful if",
     ]
     
-    # Check if revised response is suspiciously short or looks like critique
-    is_critique = any(indicator in revised.lower()[:100] for indicator in critique_indicators)
-    is_too_short = len(revised) < 30
+    is_critique_text = any(indicator in revised.lower()[:150] for indicator in critique_indicators)
+    is_too_short = len(revised.strip()) < 10
     
-    if is_critique or is_too_short:
-        # Likely a malformed extraction - use fallback
-        revised = fallback_response
-        # Log this for debugging (will be visible in critique_notes)
-        if not critic_notes:
-            critic_notes = text[:256].strip()
+    if is_critique_text or is_too_short:
+        # This looks like critique text, not a response - keep original
+        return critic_notes, fallback_response
+    
+    # Final cleanup
+    revised = _clean_meta_commentary(revised)
+    
+    # Validate final result is substantive
+    if len(revised.strip()) < 10:
+        return critic_notes, fallback_response
     
     return critic_notes, revised
 
@@ -421,30 +491,48 @@ class ConstitutionalPrinciples:
 
 
 class RewardScorer:
+    """Reward model scorer with explicit error handling - no fallback."""
+    
     def __init__(self) -> None:
         self.rm_tok = None
         self.rm_model = None
-        self.using_heuristic = False
         self._init_rm()
 
     def _init_rm(self) -> None:
+        """Initialize reward model with explicit error handling - no fallbacks."""
+        name = os.environ.get("STAGE3_RM_MODEL", "OpenAssistant/reward-model-deberta-v3-large-v2")
+        
         try:
-            name = os.environ.get("STAGE3_RM_MODEL", "OpenAssistant/reward-model-deberta-v3-large-v2")
+            print(f"[Stage3] Loading reward model: {name}")
             self.rm_tok = AutoTokenizer.from_pretrained(name)
             self.rm_model = AutoModelForSequenceClassification.from_pretrained(
-                name, device_map="auto"
+                name,
+                device_map="auto",
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             )
             self.rm_model.eval()
-            _print_once("[Stage3] Reward model loaded: OpenAssistant/reward-model-deberta-v3-large-v2")
+            print(f"[Stage3] ✓ Reward model loaded successfully")
+            
+            # Pre-flight test to ensure model works
+            test_score = self._rm_score("Test prompt", "Test response")
+            print(f"[Stage3] ✓ Reward model test score: {test_score:.4f}")
+            
         except Exception as e:
-            self.rm_tok = None
-            self.rm_model = None
-            self.using_heuristic = True
-            _print_once(f"[Stage3] Reward model unavailable ({e}). Falling back to heuristic scorer.")
+            raise RuntimeError(
+                f"Failed to load reward model '{name}': {e}\n\n"
+                f"Remediation steps:\n"
+                f"1. Ensure GPU is available in Colab (Runtime > Change runtime type > T4 GPU)\n"
+                f"2. Verify internet connection for model download\n"
+                f"3. Try manually downloading: from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('{name}')\n"
+                f"4. Check available memory: !nvidia-smi in Colab\n\n"
+                f"CRITICAL: Heuristic scoring is NOT available - must fix reward model loading.\n"
+                f"Per repository rules, we use explicit exception handling without fallbacks."
+            ) from e
 
     def _rm_score(self, prompt: str, response: str) -> float:
+        """Score using the reward model."""
         try:
-            assert self.rm_tok is not None and self.rm_model is not None
+            assert self.rm_tok is not None and self.rm_model is not None, "Reward model not loaded"
             text = f"User: {prompt}\nAssistant: {response}"
             inputs = self.rm_tok(text, return_tensors="pt", truncation=True, max_length=512)
             device = resolve_device_for_inputs(self.rm_model)
@@ -454,30 +542,12 @@ class RewardScorer:
             if out.logits.shape[-1] == 1:
                 return float(out.logits.squeeze().detach().cpu())
             return float(out.logits.softmax(-1)[0].max().detach().cpu())
-        except Exception:
-            return 0.0
-
-    @staticmethod
-    def _heuristic_score(prompt: str, response: str) -> float:
-        words = len(response.split())
-        lines = response.count("\n")
-        lower = response.lower()
-        has_structure = sum(int(k in lower) for k in ["step", "example", "summary", "code", "bullet"])
-        overlap = 0.0
-        try:
-            pw = set(prompt.lower().split())
-            rw = set(lower.split())
-            overlap = len(pw & rw) / max(1, len(pw))
-        except Exception:
-            pass
-        penalty_short = -2.0 if words < 25 else 0.0
-        penalty_long = -1.0 if words > 600 else 0.0
-        return 0.3 * overlap + 0.02 * min(words, 400) + 0.3 * min(lines, 10) + 0.5 * has_structure + penalty_short + penalty_long
+        except Exception as e:
+            raise RuntimeError(f"Error scoring with reward model: {e}") from e
 
     def score(self, prompt: str, response: str) -> float:
-        if self.rm_tok is not None and self.rm_model is not None:
-            return self._rm_score(prompt, response)
-        return self._heuristic_score(prompt, response)
+        """Score a prompt-response pair."""
+        return self._rm_score(prompt, response)
 
 
 class OptionalSafety:
@@ -588,7 +658,7 @@ def stage3_loop(args: Args) -> Dict[str, Any]:
 
     scorer = RewardScorer()
     safety = OptionalSafety()
-    principles = ConstitutionalPrinciples()  # ADDED: Load constitutional principles
+    principles = ConstitutionalPrinciples()
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -597,9 +667,15 @@ def stage3_loop(args: Args) -> Dict[str, Any]:
     revised_wins = 0
     score_delta_sum = 0.0
     errors = 0
+    
+    # Collect all pairs before filtering
+    all_pairs: List[Dict[str, Any]] = []
+    
+    # Phase 2.3: Track principle usage
+    principle_usage: Dict[str, int] = {}
 
-    with out_path.open("w", encoding="utf-8") as f:
-        for i, prompt in enumerate(prompts, start=1):
+    print(f"[Stage3] Generating {len(prompts)} critique-revision pairs...")
+    for i, prompt in enumerate(prompts, start=1):
             start_time = time.time()
             try:
                 base_messages = make_base_messages(args.system_prompt, prompt)
@@ -614,6 +690,10 @@ def stage3_loop(args: Args) -> Dict[str, Any]:
 
                 # ADDED: Select relevant principles for this prompt/response pair
                 principle_texts, principle_ids = principles.select_principles(prompt, base_resp)
+                
+                # Phase 2.3: Track which principles are used
+                for pid in principle_ids:
+                    principle_usage[pid] = principle_usage.get(pid, 0) + 1
 
                 # UPDATED: Pass principles to critique messages
                 crit_messages = make_critique_messages(prompt, base_resp, principles=principle_texts)
@@ -646,7 +726,8 @@ def stage3_loop(args: Args) -> Dict[str, Any]:
                 if s is not None:
                     record["safety_score"] = float(s)
 
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                # Collect pair for later filtering
+                all_pairs.append(record)
 
                 processed += 1
                 if chosen == "revised":
@@ -654,33 +735,71 @@ def stage3_loop(args: Args) -> Dict[str, Any]:
                 score_delta_sum += (revised_score - base_score)
                 elapsed = time.time() - start_time
 
-                # Log every example for better visibility
-                print(
-                    f"[Stage3] Progress {i}/{len(prompts)} | wins={revised_wins}/{processed} | "
-                    f"avg_delta={(score_delta_sum / max(1, processed)):.4f} | "
-                    f"chosen={chosen} | time={elapsed:.1f}s"
-                )
+                # Log progress
+                if i % 10 == 0 or i == len(prompts):
+                    print(
+                        f"[Stage3] Progress {i}/{len(prompts)} | wins={revised_wins}/{processed} | "
+                        f"avg_delta={(score_delta_sum / max(1, processed)):.4f} | "
+                        f"chosen={chosen} | time={elapsed:.1f}s"
+                    )
             except Exception as ex:
                 errors += 1
                 print(f"[Stage3] Error at index {i}: {ex}")
                 continue
+    
+    # Apply data quality filter
+    print(f"\n[Stage3] Applying data quality filters...")
+    from .data_quality import PairQualityFilter
+    
+    filter_obj = PairQualityFilter(
+        min_score_delta=0.1,
+        max_identical_ratio=0.05,
+        target_revised_win_rate=0.60,
+    )
+    filtered_pairs, filter_stats = filter_obj.filter_pairs(all_pairs)
+    
+    # Write filtered pairs to output
+    with out_path.open("w", encoding="utf-8") as f:
+        for record in filtered_pairs:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    
+    print(f"\n[Stage3] Wrote {len(filtered_pairs)} filtered pairs to {out_path}")
 
-    avg_delta = float(score_delta_sum / max(1, processed))
-    win_rate = float(revised_wins / max(1, processed))
+    # Calculate final statistics on filtered pairs
+    if filtered_pairs:
+        filtered_deltas = [p["revised_score"] - p["base_score"] for p in filtered_pairs]
+        filtered_avg_delta = sum(filtered_deltas) / len(filtered_deltas)
+        filtered_revised_wins = sum(1 for p in filtered_pairs if p["chosen"] == "revised")
+        filtered_win_rate = filtered_revised_wins / len(filtered_pairs)
+    else:
+        filtered_avg_delta = 0.0
+        filtered_win_rate = 0.0
+    
+    # Phase 2.3: Report principle usage
+    if principle_usage:
+        print("\n=== Constitutional Principle Usage ===")
+        for pid in sorted(principle_usage.keys()):
+            count = principle_usage[pid]
+            print(f"  {pid}: {count} times ({count/processed*100:.1f}%)")
+    
     summary = {
-        "num_processed": processed,
+        "num_generated": processed,
+        "num_filtered": len(filtered_pairs),
         "requested": args.num_examples,
-        "avg_score_delta": avg_delta,
-        "revised_win_rate": win_rate,
+        "avg_score_delta_filtered": float(filtered_avg_delta),
+        "revised_win_rate_filtered": float(filtered_win_rate),
         "errors": errors,
-        "scoring_backend": "heuristic" if getattr(scorer, "using_heuristic", False) else "OpenAssistant/reward-model-deberta-v3-large-v2",
+        "filter_stats": filter_stats,
+        "principle_usage": principle_usage,
+        "scoring_backend": "OpenAssistant/reward-model-deberta-v3-large-v2",
         "output_path": str(out_path),
     }
 
-    print("=== Stage 3 Summary ===")
-    print(f"Processed: {processed} / requested {args.num_examples}")
-    print(f"Avg score delta (revised - base): {avg_delta:.4f}")
-    print(f"Win rate (revised better): {win_rate:.3%}")
+    print("\n=== Stage 3 Summary ===")
+    print(f"Generated: {processed} pairs")
+    print(f"After filtering: {len(filtered_pairs)} pairs ({len(filtered_pairs)/processed*100:.1f}% retained)")
+    print(f"Avg score delta (filtered): {filtered_avg_delta:.4f}")
+    print(f"Win rate (filtered): {filtered_win_rate:.3%}")
     print(f"Errors skipped: {errors}")
     print(f"Scoring backend: {summary['scoring_backend']}")
     print(f"Output: {out_path}")
