@@ -68,11 +68,22 @@ class PairQualityFilter:
               f"({self.stats['filtered_identical']/len(pairs)*100:.1f}%)")
         
         if not non_identical:
-            raise RuntimeError(
-                "All pairs filtered due to identical responses!\n"
-                "This indicates the critique-revision system is not working.\n"
-                "Check that reward model is loaded and temperature is > 0."
-            )
+            print("\n" + "="*80)
+            print("WARNING: ALL PAIRS HAVE IDENTICAL BASE/REVISED RESPONSES!")
+            print("="*80)
+            print("This indicates the critique-revision system is not generating revisions.")
+            print("Possible causes:")
+            print("  1. Model is always outputting KEEP_ORIGINAL")
+            print("  2. Parse logic is too aggressive with fallbacks")
+            print("  3. Temperature is too low (should be > 0.5)")
+            print("  4. Model is generating meta-commentary instead of direct responses")
+            print("\nProceeding anyway to allow inspection of generated outputs...")
+            print("="*80 + "\n")
+            # Return original pairs with a warning flag so we can inspect them
+            for p in pairs:
+                p["_quality_warning"] = "identical_base_revised"
+            self.stats["total_output"] = len(pairs)
+            return pairs, self.stats
         
         # Step 2: Remove pairs with weak score deltas
         strong_delta = []

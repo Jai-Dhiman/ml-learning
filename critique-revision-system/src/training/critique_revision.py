@@ -286,6 +286,9 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
     critic_notes = ""
     revised = fallback_response
     
+    # DIAGNOSTIC: Track why we fallback
+    fallback_reason = None
+    
     # Parse critique and revision sections
     if c_idx != -1 and r_idx != -1 and r_idx > c_idx:
         critic_notes = text[c_idx + len(c_tag):r_idx].strip()
@@ -295,11 +298,16 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
         revised = text[r_idx + len(r_tag):].strip()
     else:
         # Fallback: no clear structure, keep original
+        fallback_reason = "NO_TAGS_FOUND"
         critic_notes = text[:512].strip()
         revised = fallback_response
+        _print_once(f"[Stage3] FALLBACK ({fallback_reason}): Missing Critique:/Revised: tags in output")
     
     # Check for KEEP_ORIGINAL signal
     if "KEEP_ORIGINAL" in revised.upper() or "KEEP ORIGINAL" in revised.upper():
+        if fallback_reason is None:
+            fallback_reason = "KEEP_ORIGINAL"
+        _print_once(f"[Stage3] FALLBACK ({fallback_reason}): Model requested KEEP_ORIGINAL")
         return critic_notes, fallback_response
     
     # Clean multi-turn artifacts
@@ -328,6 +336,9 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
             revised = quote_match.group(1).strip().strip('"')
         else:
             # No salvageable content, keep original
+            if fallback_reason is None:
+                fallback_reason = "META_COMMENTARY_UNSALVAGEABLE"
+            _print_once(f"[Stage3] FALLBACK ({fallback_reason}): Meta-commentary detected, could not extract response")
             return critic_notes, fallback_response
     
     # Additional validation checks
@@ -347,6 +358,9 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
     
     if is_critique_text or is_too_short:
         # This looks like critique text, not a response - keep original
+        if fallback_reason is None:
+            fallback_reason = "CRITIQUE_TEXT" if is_critique_text else "TOO_SHORT"
+        _print_once(f"[Stage3] FALLBACK ({fallback_reason}): Revision looks like critique text or too short (<10 chars)")
         return critic_notes, fallback_response
     
     # Final cleanup
@@ -354,7 +368,14 @@ def parse_critique_output(text: str, fallback_response: str) -> Tuple[str, str]:
     
     # Validate final result is substantive
     if len(revised.strip()) < 10:
+        if fallback_reason is None:
+            fallback_reason = "TOO_SHORT_AFTER_CLEANING"
+        _print_once(f"[Stage3] FALLBACK ({fallback_reason}): Final revision too short after cleaning (<10 chars)")
         return critic_notes, fallback_response
+    
+    # SUCCESS: We have a valid revision
+    if fallback_reason is None:
+        _print_once(f"[Stage3] SUCCESS: Valid revision extracted (length={len(revised)} chars)")
     
     return critic_notes, revised
 
