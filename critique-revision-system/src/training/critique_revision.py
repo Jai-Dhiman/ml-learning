@@ -416,7 +416,7 @@ class ConstitutionalPrinciples:
         if principles_path is None:
             # Try to find principles file in configs/
             repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-            principles_path = os.path.join(repo_root, "critique-revision-system", "configs", "constitutional_principles.yaml")
+            principles_path = os.path.join(repo_root, "configs", "constitutional_principles.yaml")
         
         if os.path.exists(principles_path):
             try:

@@ -46,6 +46,10 @@ trainer_state.json
 *.tar
 *.gz
 
+*.pkl
+
+_CHECKPOINT_METADATA
+
 # Tokenizer files (large JSON files - 33MB each)
 # These can be regenerated from the model
 tokenizer.json
